@@ -36,17 +36,22 @@ def safe_init_firebase():
 # 🧼 終極符號與贅字終結者：徹底拔除「區」與所有殘留地名贅字
 # ============================================================
 def super_clean_title(raw_title):
-    # 1. 先把明顯的贅字集合全面剔除
-    name = raw_title.replace("食記", "").replace("台中市", "").replace("台中", "", "．").replace("沙鹿", "", "．").replace("FW", "").replace("630前買1送1", "")
+    # 1. 💡 精準手動剔除你發現的各種贅字、FW、促銷字眼與地區名稱（改為正確的 Python 語法）
+    name = raw_title.replace("食記", "") \
+                    .replace("台中市", "") \
+                    .replace("台中", "") \
+                    .replace("沙鹿區", "") \
+                    .replace("沙鹿", "") \
+                    .replace("FW", "") \
+                    .replace("630前買1送1", "")
     
-    # 2. 核心白名單：利用正規表達式，只保留 中文字、英文字母、數字
+    # 2. ✨ 大殺器：這行會自動幫你把「．」、引號、括號、橫槓等所有非中英數的符號全部一槍斃命
     name = re.sub(r'[^\u4e00-\u9fa5a-zA-Z0-9]', '', name)
     
-    # 3. 💡 針對你發現的 Bug 進行硬核修剪：
-    # 如果因為順序關係，導致開頭殘留了「區」字或其他地區贅字，用迴圈強制切除開頭！
+    # 3. 終極修剪：如果開頭不幸還是殘留了「區」或「市」等漏網之魚，自動剪掉
     front_garbage = ["區", "市", "鎮", "鄉"]
     while len(name) > 0 and name[0] in front_garbage:
-        name = name[1:] # 拔掉開頭第一個字，直到開頭不是這些垃圾字為止
+        name = name[1:]
         
     return name.strip()
 
