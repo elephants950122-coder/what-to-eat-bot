@@ -15,8 +15,8 @@
         .card { border: none; border-radius: 15px; box-shadow: 0 6px 18px rgba(0,0,0,0.05); transition: transform 0.2s; }
         .card:hover { transform: translateY(-5px); }
         .status-badge { font-size: 0.9rem; padding: 6px 12px; border-radius: 20px; }
-        .btn-custom { border-radius: 10px; padding: 10px 20px; font-weight: bold; }
-        .chat-bot-container { position: fixed; bottom: 20px; right: 20px; z-index: 1000; box-shadow: 0 10px 30px rgba(0,0,0,0.15); border-radius: 12px; overflow: hidden; background: #fff; }
+        .btn-custom { border-radius: 10px; padding: 12px 20px; font-weight: bold; font-size: 1.05rem; transition: all 0.3s; }
+        .qrcode-box { background-color: #fdfdfd; border: 1px dashed #2ecc71; border-radius: 12px; padding: 15px; }
     </style>
 </head>
 <body>
@@ -41,13 +41,13 @@
     </div>
 
     <div class="container">
-        <div class="row g-4 justify-content-center">
+        <div class="row g-4 justify-content-center mb-5">
             
-            <div class="col-md-5">
+            <div class="col-md-4">
                 <div class="card h-100 p-4">
                     <div class="card-body d-flex flex-column">
                         <h3 class="card-title fw-bold text-dark mb-3">
-                            <i class="fas fa-spider text-primary me-2"></i>PTT 大數據爬蟲引擎
+                            <i class="fas fa-spider text-primary me-2"></i>PTT 爬蟲引擎
                         </h3>
                         <p class="card-text text-muted flex-grow-1">
                             自動前往 PTT Food 板搜刮所有關於「沙鹿」的歷史食記。經過後端系統清洗、篩選店名並模擬評分後，全自動灌入 Firebase 雲端資料庫。
@@ -55,33 +55,53 @@
                         <hr class="opacity-10">
                         <div class="mt-auto">
                             <a href="/find_food" class="btn btn-primary btn-custom w-100 shadow-sm">
-                                <i class="fas fa-play me-2"></i>立即執行全自動爬蟲同步
+                                <i class="fas fa-play me-2"></i>執行全自動爬蟲同步
                             </a>
-                            <small class="text-muted d-block text-center mt-2">點擊將會觸發 PTT 資料同步並展示清單</small>
+                            <small class="text-muted d-block text-center mt-2">點擊觸發資料庫數據同步</small>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="col-md-5">
+            <div class="col-md-4">
                 <div class="card h-100 p-4">
                     <div class="card-body d-flex flex-column">
                         <h3 class="card-title fw-bold text-dark mb-3">
-                            <i class="fab fa-line text-success me-2"></i>Dialogflow Webhook 入口
+                            <i class="fas fa-laptop-code text-info me-2"></i>網頁版智慧對話入口
                         </h3>
                         <p class="card-text text-muted flex-grow-1">
-                            本網址為 Dialogflow Fulfillment 專用的後端 API 接收通道。負責即時接收 LINE 聊天室訊息、查詢 Firebase 資料庫並隨機抽選 5 間美食回傳。
+                            免安裝、免登入 LINE 即可現場測試！此入口直連 Dialogflow 官方全螢幕獨立控制台。使用者可在此模擬輸入沙鹿早餐、宵夜或下午茶，即時調用後端大數據庫。
                         </p>
                         <hr class="opacity-10">
                         <div class="mt-auto">
-                            <div class="input-group mb-2">
-                                <span class="input-group-text bg-light text-muted"><i class="fas fa-link"></i></span>
-                                <input type="text" id="webhookUrl" class="form-control bg-white text-secondary" value="" readonly>
-                            </div>
-                            <button onclick="copyWebhook()" class="btn btn-success btn-custom w-100 shadow-sm">
-                                <i class="fas fa-copy me-2"></i><span id="btnText">點擊複製 Webhook 完整網址</span>
-                            </button>
-                            <small class="text-muted d-block text-center mt-2">複製後可直接貼到 Dialogflow Fulfillment 中</small>
+                            <a href="https://bot.dialogflow.com/76d615d9-a37a-42dc-83b0-612a4dd0e618" class="btn btn-info text-white btn-custom w-100 shadow-sm">
+                                <i class="fas fa-comments me-2"></i>進入網頁版模擬測試
+                            </a>
+                            <small class="text-muted d-block text-center mt-2">點擊在原分頁開啟官方獨立聊天室</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card h-100 p-4">
+                    <div class="card-body d-flex flex-column">
+                        <h3 class="card-title fw-bold text-dark mb-3">
+                            <i class="fab fa-line text-success me-2"></i>LINE 行動版好友入口
+                        </h3>
+                        <p class="card-text text-muted mb-3">
+                            本專案已透過 Webhook 機制完整對接 LINE 官方訊息接口。手機用戶請直接掃描下方 QR Code，或點擊綠色專屬連結加入好友即可進行行動端實測。
+                        </p>
+                        
+                        <div class="qrcode-box text-center mb-3">
+                            <img src="https://placehold.co/120x120/2ecc71/ffffff?text=LINE+QR+Code" alt="LINE QR Code" class="img-fluid shadow-sm mb-2" style="max-height: 110px; border-radius: 8px;">
+                            <div class="small fw-bold text-success"><i class="fas fa-qrcode me-1"></i>現場手機掃碼加好友</div>
+                        </div>
+
+                        <div class="mt-auto">
+                            <a href="https://line.me" target="_blank" class="btn btn-success btn-custom w-100 shadow-sm">
+                                <i class="fab fa-line me-2"></i>一鍵點擊加入 LINE 機器人
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -89,8 +109,13 @@
 
         </div>
 
-        <div class="chat-bot-container d-none d-md-block">
-            <iframe allow="microphone;" width="350" height="430" src="https://console.dialogflow.com/api-client/demo/embedded/what-to-eat-bot"></iframe>
+        <div class="card border-0 shadow-sm p-4 text-center bg-white mb-5" style="border-radius: 15px;">
+            <p class="text-muted fw-bold m-0" style="font-size: 0.95rem;"><i class="fas fa-plug text-warning me-2"></i>Dialogflow Fulfillment Webhook 後端對接專用地址</p>
+            <div class="input-group my-2 mx-auto" style="max-width: 600px;">
+                <span class="input-group-text bg-light text-muted"><i class="fas fa-link"></i></span>
+                <input type="text" id="webhookUrl" class="form-control bg-white text-secondary text-center" value="" readonly>
+                <button onclick="copyWebhook()" class="btn btn-outline-secondary" type="button" id="btnText"><i class="fas fa-copy"></i> 複製</button>
+            </div>
         </div>
 
         <footer class="text-center my-5 text-muted opacity-75">
@@ -98,20 +123,19 @@
         </footer>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // 頁面載入時，自動抓取當前網域 (不管是本地還是 Vercel) 組合出完整的 webhook 網址
         document.getElementById("webhookUrl").value = window.location.origin + "/webhook";
 
         function copyWebhook() {
             var copyText = document.getElementById("webhookUrl");
             copyText.select();
-            copyText.setSelectionRange(0, 99999); // 行動裝置相容
+            copyText.setSelectionRange(0, 99999);
             navigator.clipboard.writeText(copyText.value);
             
-            // 變更按鈕文字做為提示效果
-            document.getElementById("btnText").innerText = "📋 複製成功！";
+            document.getElementById("btnText").innerHTML = "<i class='fas fa-check'></i> 成功";
             setTimeout(function(){
-                document.getElementById("btnText").innerText = "點擊複製 Webhook 完整網址";
+                document.getElementById("btnText").innerHTML = "<i class='fas fa-copy'></i> 複製";
             }, 2000);
         }
     </script>
