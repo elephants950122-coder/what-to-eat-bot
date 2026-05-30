@@ -1,4 +1,5 @@
 import os
+import json
 import random
 import time
 import urllib.parse
@@ -10,23 +11,29 @@ from firebase_admin import credentials, firestore
 
 app = Flask(__name__)
 
-# 💡 定義一個安全的初始化安全鎖，確保不管在哪個路由、哪個執行緒被呼叫，都能 100% 成功連線
+# ============================================================
+# 🔑 1. 初始化 Firebase（100% 配合你 Vercel 後台的 FIREBASE_KEY）
+# ============================================================
 def safe_init_firebase():
     if not firebase_admin._apps:
         try:
-            # 確保讀取與 web.py 同資料夾底下的 serviceAccountKey.json
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            key_path = os.path.join(current_dir, "serviceAccountKey.json")
-            
-            # 如果預設路徑找不到，就降級讀取相對路徑
-            if not os.path.exists(key_path):
-                key_path = "serviceAccountKey.json"
-                
-            cred = credentials.Certificate(key_path)
-            firebase_admin.initialize_app(cred)
-            print("✅ [內部初始化] Firebase 雲端資料庫連線成功！")
+            # 優先從你截圖中的 Vercel 環境變數讀取
+            if "FIREBASE_KEY" in os.environ:
+                key_json_str = os.environ["FIREBASE_KEY"].strip()
+                key_dict = json.loads(key_json_str)
+                cred = credentials.Certificate(key_dict)
+                firebase_admin.initialize_app(cred)
+                print("✅ [雲端連線] 成功透過 FIREBASE_KEY 環境變數建立連線！")
+            else:
+                # 本地測試時的備案（如果本地有實體檔案）
+                if os.path.exists("serviceAccountKey.json"):
+                    cred = credentials.Certificate("serviceAccountKey.json")
+                    firebase_admin.initialize_app(cred)
+                    print("✅ [本地連線] 成功透過實體金鑰檔案建立連線！")
+                else:
+                    raise FileNotFoundError("雲端無 FIREBASE_KEY 變數，且本地找不到 serviceAccountKey.json 檔案。")
         except Exception as e:
-            print(f"❌ [內部初始化] 失敗：{e}")
+            print(f"❌ [Firebase 初始化失敗]：{e}")
             raise e
 
 # ============================================================
@@ -53,7 +60,6 @@ def find_food():
     page_count = 1
     
     try:
-        # 確保 Firebase 在現場初始化成功
         safe_init_firebase()
         db = firestore.client()
         
@@ -109,7 +115,7 @@ def find_food():
         return f"❌ 發生異常：{e}"
 
 # ============================================================
-# 🤖 路由二：Webhook (精準解決 default app 不存在問題)
+# 🤖 路由二：Webhook 
 # ============================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -122,10 +128,9 @@ def webhook():
         info = "我是林建宇設計的機器人，為您從資料庫動態篩選精選沙鹿美食：\n\n"
 
         try:
-            # 💡 核心修正：進來第一件事先調用安全鎖，確保 App 100% 存在
+            # 💡 呼叫安全鎖，強制讓雲端直接讀取環境變數，不需要實體檔案
             safe_init_firebase()
             
-            # 連線與撈取資料
             db = firestore.client()
             collection_ref = db.collection("restaurants")
             docs = collection_ref.get()
@@ -135,7 +140,6 @@ def webhook():
                 all_restaurants.append(doc.to_dict())
             
             if all_restaurants:
-                # 隨機抽出 5 家店
                 sample_size = min(5, len(all_restaurants))
                 random_list = random.sample(all_restaurants, sample_size)
                 
