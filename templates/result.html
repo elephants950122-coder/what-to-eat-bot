@@ -15,6 +15,7 @@
         .data-card { border: none; border-radius: 15px; box-shadow: 0 6px 18px rgba(0,0,0,0.05); background-color: white; padding: 30px; }
         .table { vertical-align: middle; }
         .btn-home { border-radius: 10px; padding: 12px 24px; font-weight: bold; font-size: 1.1rem; }
+        .total-counter { font-size: 2.5rem; font-weight: 900; color: #e74c3c; }
     </style>
 </head>
 <body>
@@ -34,16 +35,28 @@
                 <a href="/" class="title-link"><i class="fas fa-chart-bar me-3"></i>PTT 美食大數據同步結果</a>
             </h1>
             <p class="lead opacity-75">本次即時抓取同步成功！最新資料庫狀態一覽</p>
-            <span class="badge bg-warning text-dark shadow-sm fw-bold">
-                <i class="fas fa-bolt me-1"></i> 本次新增：{{ total_inserted }} 筆資料
-            </span>
+            
+            <div class="mt-3">
+                <span class="badge bg-warning text-dark shadow-sm fw-bold me-2 px-3 py-2">
+                    <i class="fas fa-bolt me-1"></i> 本次爬蟲新增：{{ total_inserted }} 筆
+                </span>
+            </div>
         </div>
     </div>
 
     <div class="container mb-5">
+        
+        <div class="card border-0 shadow-sm p-4 text-center mb-4 bg-white" style="border-radius: 15px;">
+            <p class="text-muted fw-bold m-0" style="font-size: 1.1rem;">📊 雲端資料庫目前累積資料總計</p>
+            <div class="total-counter my-2">
+                <i class="fas fa-database me-2"></i>{{ total_in_db }} <span style="font-size: 1.2rem; font-weight: normal; color: #555;">筆資料</span>
+            </div>
+            <small class="text-secondary">所有收集到的沙鹿在地美食大數據已全數整齊排列於下方表格</small>
+        </div>
+
         <div class="data-card">
             <div class="d-flex justify-content-between align-items-center mb-4">
-                <h3 class="fw-bold text-dark m-0"><i class="fas fa-list-ul text-primary me-2"></i>雲端資料庫最新快照 (前100筆)</h3>
+                <h3 class="fw-bold text-dark m-0"><i class="fas fa-list-ul text-primary me-2"></i>雲端資料庫完整清單</h3>
                 <a href="/" class="btn btn-outline-secondary btn-home shadow-sm">
                     <i class="fas fa-arrow-left me-2"></i>回到管理首頁
                 </a>

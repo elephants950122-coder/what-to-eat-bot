@@ -76,12 +76,12 @@
                         <div class="mt-auto">
                             <div class="input-group mb-2">
                                 <span class="input-group-text bg-light text-muted"><i class="fas fa-link"></i></span>
-                                <input type="text" class="form-control bg-white text-secondary" value="/webhook" readonly>
+                                <input type="text" id="webhookUrl" class="form-control bg-white text-secondary" value="" readonly>
                             </div>
-                            <button class="btn btn-success btn-custom w-100 shadow-sm" disabled>
-                                <i class="fas fa-robot me-2"></i>LINE 機器人通道運行中
+                            <button onclick="copyWebhook()" class="btn btn-success btn-custom w-100 shadow-sm">
+                                <i class="fas fa-copy me-2"></i><span id="btnText">點擊複製 Webhook 完整網址</span>
                             </button>
-                            <small class="text-muted d-block text-center mt-2">此網址供 Dialogflow 後端對接使用</small>
+                            <small class="text-muted d-block text-center mt-2">複製後可直接貼到 Dialogflow Fulfillment 中</small>
                         </div>
                     </div>
                 </div>
@@ -98,5 +98,22 @@
         </footer>
     </div>
 
+    <script>
+        // 頁面載入時，自動抓取當前網域 (不管是本地還是 Vercel) 組合出完整的 webhook 網址
+        document.getElementById("webhookUrl").value = window.location.origin + "/webhook";
+
+        function copyWebhook() {
+            var copyText = document.getElementById("webhookUrl");
+            copyText.select();
+            copyText.setSelectionRange(0, 99999); // 行動裝置相容
+            navigator.clipboard.writeText(copyText.value);
+            
+            // 變更按鈕文字做為提示效果
+            document.getElementById("btnText").innerText = "📋 複製成功！";
+            setTimeout(function(){
+                document.getElementById("btnText").innerText = "點擊複製 Webhook 完整網址";
+            }, 2000);
+        }
+    </script>
 </body>
 </html>

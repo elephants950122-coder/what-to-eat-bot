@@ -42,7 +42,7 @@ def home():
     return render_template("index.html")
 
 # ============================================================
-# 📡 2. 爬蟲路由：升級版！爬取後直接撈出最新大數據，並用網頁表格渲染
+# 📡 2. 爬蟲路由：撈出「全部」資料，不設上限
 # ============================================================
 @app.route("/find_food")
 def find_food():
@@ -62,7 +62,7 @@ def find_food():
         db = firestore.client()
         
         # 執行爬蟲灌入資料
-        while url and page_count <= 3: # 限制3頁，避免 Vercel 執行過久逾時
+        while url and page_count <= 3:
             response = requests.get(url, headers=headers, cookies=cookies)
             if response.status_code != 200: break
                 
@@ -109,20 +109,23 @@ def find_food():
                     url = "https://www.ptt.cc" + btn['href']
                     break
                     
-        # 💡 核心亮點：爬完之後，立刻從 Firebase 中撈出所有的美食資料送給前端網頁排版！
-        docs = db.collection("restaurants").order_by("sync_time", direction=firestore.Query.DESCENDING).limit(100).get()
+        # 💡 修正：拿掉 .limit(100)，直接撈出全部資料！
+        docs = db.collection("restaurants").order_by("sync_time", direction=firestore.Query.DESCENDING).get()
         restaurant_list = []
         for doc in docs:
             restaurant_list.append(doc.to_dict())
             
-        # 渲染新建立的爬蟲結果網頁，並傳入統計筆數與完整餐廳陣列
-        return render_template("result.html", total_inserted=total_inserted, restaurants=restaurant_list)
+        # 計算資料庫目前的總筆數
+        total_in_db = len(restaurant_list)
+            
+        # 傳送 total_inserted (本次新增) 與 total_in_db (資料庫總計) 給前端
+        return render_template("result.html", total_inserted=total_inserted, total_in_db=total_in_db, restaurants=restaurant_list)
         
     except Exception as e:
         return f"❌ 系統發生異常：{e}"
 
 # ============================================================
-# 🤖 3. Webhook 通道 (LINE + Dialogflow 入口)
+# 🤖 3. Webhook 通道
 # ============================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
