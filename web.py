@@ -3,6 +3,7 @@ import json
 import random
 import time
 import urllib.parse
+import re  # 💡 引入正規表達式模組
 import requests
 from flask import Flask, request, jsonify, make_response, render_template
 from bs4 import BeautifulSoup
@@ -32,18 +33,16 @@ def safe_init_firebase():
             raise e
 
 # ============================================================
-# 🧼 依照你的需求設計的標題清洗器：移除 [食記] 及各式雙引號
+# 🧼 終極符號終結者：只允許中英數，所有特殊符號、引號、箭頭強制蒸發
 # ============================================================
-def clean_ptt_title_for_name(raw_title):
-    # 移除 [食記]、台中、沙鹿 等基本標籤
-    name = raw_title.replace("[食記]", "").replace("台中", "").replace("沙鹿", "")
+def super_clean_title(raw_title):
+    # 1. 先把明顯的贅字全面剔除（不管它有沒有帶括號）
+    name = raw_title.replace("食記", "").replace("台中", "").replace("沙鹿", "")
     
-    # 拔除英文雙引號、英文單引號、中文雙引號、中文單引號
-    quotes_and_symbols = ['"', "'", "“", "”", "‘", "’", "「", "」", "『", "』"]
-    for symbol in quotes_and_symbols:
-        name = name.replace(symbol, "")
-        
-    # 清除前後的多餘空格
+    # 2. 💡 核心大絕招：利用正規表達式，只保留 中文字 (\u4e00-\u9fa5)、英文字母 (a-zA-Z)、數字 (0-9)
+    # 所有引號 ""、「」、、橫槓 -、特殊箭頭 →、空格，只要不在白名單內的通通直接變不見！
+    name = re.sub(r'[^\u4e00-\u9fa5a-zA-Z0-9]', '', name)
+    
     return name.strip()
 
 # ============================================================
@@ -54,7 +53,7 @@ def home():
     return render_template("index.html")
 
 # ============================================================
-# 📡 2. 爬蟲路由 (改用 ptt_title 進行精準硬核去重)
+# 📡 2. 爬蟲路由 (符號終結 + 硬核去重)
 # ============================================================
 @app.route("/find_food")
 def find_food():
@@ -72,7 +71,7 @@ def find_food():
         safe_init_firebase()
         db = firestore.client()
         
-        # 1. 先捞出目前資料庫裡所有已經存在文章的 ptt_title，存在集合裡加快比對速度
+        # 撈出目前資料庫裡所有資料，建立比對字典
         existing_docs = db.collection("restaurants").get()
         existing_titles = {}
         for doc in existing_docs:
@@ -93,14 +92,17 @@ def find_food():
                     if "公告" in title_text or "[食記]" not in title_text:
                         continue
                     
-                    # 💡 依需求：將名稱設定為移除 [食記] 與雙引號後的乾淨標題
-                    display_name = clean_ptt_title_for_name(title_text)
+                    # 💡 呼叫終極符號終結者
+                    display_name = super_clean_title(title_text)
+                    
+                    if not display_name:
+                        continue
                     
                     simulated_rating = round(random.uniform(4.0, 4.9), 1)
                     
                     doc = {
-                        "name": display_name,         # 乾淨的文章標題（無[食記]、無引號）
-                        "ptt_title": title_text,       # 原始 PTT 標題（作為資料庫唯一識別）
+                        "name": display_name,         # 絕對純淨的中英數名稱
+                        "ptt_title": title_text,       # 原始 PTT 標題（作為唯一比對鍵）
                         "area": location,
                         "rating": simulated_rating,
                         "type": "美食",
@@ -108,13 +110,11 @@ def find_food():
                         "sync_time": firestore.SERVER_TIMESTAMP
                     }
                     
-                    # 💡 2. 精準去重：直接比對原始文章標題 ptt_title
+                    # 精準去重
                     if title_text in existing_titles:
-                        # 如果這篇文章早就爬過了，直接覆蓋更新舊數據，絕不疊加！
                         dup_id = existing_titles[title_text]
                         db.collection("restaurants").document(dup_id).update(doc)
                     else:
-                        # 完全沒爬過的文章，安心新增
                         db.collection("restaurants").add(doc)
                         total_inserted += 1
                         
