@@ -16,20 +16,44 @@
         .card:hover { transform: translateY(-5px); }
         .status-badge { font-size: 0.9rem; padding: 6px 12px; border-radius: 20px; }
         .btn-custom { border-radius: 10px; padding: 10px 20px; font-weight: bold; }
-        
-        /* 💡 網頁右下角客服型浮動聊天視窗 */
-        .chat-bot-container { 
-            position: fixed; 
-            bottom: 20px; 
-            right: 20px; 
-            z-index: 1000; 
-            box-shadow: 0 12px 36px rgba(0,0,0,0.2); 
-            border-radius: 16px; 
-            overflow: hidden; 
-            background: #fff;
-            border: 1px solid #e0e0e0;
-        }
         .qrcode-box { background-color: #fdfdfd; border: 1px dashed #ced4da; border-radius: 10px; padding: 15px; }
+        
+        /* 💡 智慧開關型聊天盒樣式 */
+        .chat-wrapper {
+            position: fixed;
+            bottom: 90px;
+            right: 25px;
+            z-index: 1050;
+            box-shadow: 0 12px 36px rgba(0,0,0,0.2);
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid #e0e0e0;
+            transition: all 0.3s ease;
+        }
+        
+        /* 右下角浮動開關圓鈕 */
+        .chat-toggle-btn {
+            position: fixed;
+            bottom: 25px;
+            right: 25px;
+            width: 55px;
+            height: 55px;
+            background: #18bc9c;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(24, 188, 156, 0.4);
+            z-index: 1060;
+            transition: all 0.3s ease;
+        }
+        .chat-toggle-btn:hover {
+            transform: scale(1.1) rotate(15deg);
+            background: #128f76;
+        }
     </style>
 </head>
 <body>
@@ -83,7 +107,7 @@
                             <i class="fab fa-line text-success me-2"></i>LINE 智慧機器人入口
                         </h3>
                         <p class="card-text text-muted mb-3">
-                            本系統已完全對接 Dialogflow 與 LINE 聊天室。網頁端使用者可直接透過右下角視窗免登入對話；行動裝置用戶可掃描下方 QR Code 加入 LINE 好友測試！
+                            本系統已完全對接 Dialogflow 與 LINE 聊天室。網頁端使用者可點擊右下角懸浮按鈕免登入對話；行動裝置用戶可掃描下方 QR Code 加入 LINE 好友測試！
                         </p>
                         
                         <div class="qrcode-box text-center mb-3">
@@ -106,13 +130,17 @@
 
         </div>
 
-        <div class="chat-bot-container d-none d-md-block">
+        <div class="collapse chat-wrapper shadow" id="dialogflowChatbox">
             <iframe 
                 allow="microphone;" 
                 width="350" 
                 height="430" 
-                src="https://console.dialogflow.com/api-client/demo/embedded/76d615d9-a37a-42dc-83b0-612a4dd0e618">
+                src="https://bot.dialogflow.com/76d615d9-a37a-42dc-83b0-612a4dd0e618">
             </iframe>
+        </div>
+
+        <div class="chat-toggle-btn shadow" type="button" data-bs-toggle="collapse" data-bs-target="#dialogflowChatbox" aria-expanded="false" aria-controls="dialogflowChatbox" title="開啟網頁免登入對話盒">
+            <i class="fas fa-robot"></i>
         </div>
 
         <footer class="text-center my-5 text-muted opacity-75">
@@ -120,6 +148,7 @@
         </footer>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         document.getElementById("webhookUrl").value = window.location.origin + "/webhook";
 
