@@ -138,6 +138,9 @@ def find_food():
 # ============================================================
 # 🤖 Webhook 通道 (智慧聯想分類防翻車版)
 # ============================================================
+# ============================================================
+# 🤖 Webhook 通道 (內建 Dialogflow 結構化地理參數解析鎖)
+# ============================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
     req = request.get_json(force=True)
@@ -145,7 +148,22 @@ def webhook():
     action = query_result.get("action", "")
     
     parameters = query_result.get("parameters", {})
-    user_location = parameters.get("location", "沙鹿")
+    
+    # 💡 核心修正：安全拆解 Dialogflow 丟過來的地理物件
+    raw_location = parameters.get("location", "沙鹿")
+    
+    if isinstance(raw_location, dict):
+        # 如果是字典，優先撈取行政區 (如：沙鹿區) 或城市名，並統一拔掉「區」或「市」字以匹配資料庫
+        loc_str = raw_location.get("subadmin-area") or raw_location.get("city") or raw_location.get("admin-area") or "沙鹿"
+        user_location = loc_str.replace("區", "").replace("市", "").strip()
+    else:
+        # 如果本來就是字串，直接拿來用並拔掉「區」字
+        user_location = str(raw_location).replace("區", "").replace("市", "").strip()
+        
+    # 如果最後解析出來是空的，給予安全備案
+    if not user_location:
+        user_location = "沙鹿"
+
     user_food_type = parameters.get("food_type", "") 
     
     info = "抱歉，我目前無法處理這個動作喔！"
@@ -158,11 +176,10 @@ def webhook():
             all_restaurants = [doc.to_dict() for doc in docs]
             
             if all_restaurants:
-                # 第一層：精準鎖定地區 (如：沙鹿)
+                # 第一層：精準鎖定地區（此時 user_location 已經是純淨的 "沙鹿"）
                 filtered_list = [r for r in all_restaurants if r.get("area") == user_location]
                 
                 # 第二層：定義智慧分類代號對應的關鍵字白名單
-                # 這樣就算 PTT 標題沒寫「下午茶」，只要有「蛋糕」或「甜點」也 100% 會被歸類過來！
                 type_keywords = {
                     "宵夜": ["宵夜", "宵夜", "深夜", "燒烤", "串燒", "酒吧", "永和豆漿"],
                     "下午茶": ["下午茶", "點心", "蛋糕", "甜點", "咖啡", "冰品", "豆花", "手搖", "麵包", "烘焙"],
@@ -173,18 +190,15 @@ def webhook():
                 if user_food_type and user_food_type in type_keywords:
                     keywords = type_keywords[user_food_type]
                     
-                    # 檢查這家餐廳的原始 PTT 標題有沒有命中任何一個分類關鍵字
                     category_matched_list = []
                     for r in filtered_list:
                         title_upper = r.get("ptt_title", "").upper()
-                        # 只要標題裡包含白名單中的任一個詞，就納入推薦
                         if any(kw in title_upper for kw in keywords):
                             category_matched_list.append(r)
                             
                     filtered_list = category_matched_list
-                    info = f"🤖 這是建宇的美食機器人！已為您連線 Firebase，從小組專屬大數據庫中精選出符合【{user_location} {user_food_type}】的口袋名單：\n\n"
+                    info = f"🤖 這是建宇的美食機器人！已為您連線 Firebase，從小組專專屬大數據庫中精選出符合【{user_location} {user_food_type}】的口袋名單：\n\n"
                 else:
-                    # 如果使用者沒講種類，或者講了我們沒定義的種類，就維持一般的隨機美味推薦
                     info = f"🤖 這是建宇的美食機器人！已為您從 Firebase 大數據中，隨機精選 5 間【{user_location}】在地好料：\n\n"
                 
                 # 抽取最多 5 筆回傳
