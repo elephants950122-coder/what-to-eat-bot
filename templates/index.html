@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>沙鹿美食大數據管理後台</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { background-color: #f8f9fa; font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; }
+        .hero-section { background: linear-gradient(135deg, #2c3e50, #18bc9c); color: white; padding: 40px 0; border-radius: 0 0 20px 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .card { border: none; border-radius: 15px; box-shadow: 0 6px 18px rgba(0,0,0,0.05); transition: transform 0.2s; }
+        .card:hover { transform: translateY(-5px); }
+        .status-badge { font-size: 0.9rem; padding: 6px 12px; border-radius: 20px; }
+        .btn-custom { border-radius: 10px; padding: 10px 20px; font-weight: bold; transition: all 0.3s; }
+    </style>
+</head>
+<body>
+
+    <div class="hero-section text-center mb-5">
+        <div class="container">
+            <h1 class="display-5 fw-bold mb-2"><i class="fas fa-utensils me-3"></i>沙鹿美食大數據管理系統</h1>
+            <p class="lead opacity-75">靜宜大學 資管系期末專案成果展示</p>
+            <span class="badge bg-success status-badge shadow-sm"><i class="fas fa-check-circle me-1"></i> 雲端伺服器 正常運行中</span>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="row g-4 justify-content-center">
+            
+            <div class="col-md-5">
+                <div class="card h-100 p-4">
+                    <div class="card-body d-flex flex-column">
+                        <h3 class="card-title fw-bold text-dark mb-3">
+                            <i class="fas fa-spider text-primary me-2"></i>PTT 大數據爬蟲引擎
+                        </h3>
+                        <p class="card-text text-muted flex-grow-1">
+                            自動前往 PTT Food 板搜刮所有關於「沙鹿」的歷史食記。經過後端系統清洗、篩選店名並模擬評分後，全自動灌入 Firebase 雲端資料庫。
+                        </p>
+                        <hr class="opacity-10">
+                        <div class="mt-auto">
+                            <a href="/find_food" target="_blank" class="btn btn-primary btn-custom w-100 shadow-sm">
+                                <i class="fas fa-play me-2"></i>立即執行全自動爬蟲同步
+                            </a>
+                            <small class="text-muted d-block text-center mt-2">點擊將會觸發 PTT 歷史資料同步流程</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-5">
+                <div class="card h-100 p-4">
+                    <div class="card-body d-flex flex-column">
+                        <h3 class="card-title fw-bold text-dark mb-3">
+                            <i class="fab fa-line text-success me-2"></i>Dialogflow Webhook 入口
+                        </h3>
+                        <p class="card-text text-muted flex-grow-1">
+                            本網址為 Dialogflow Fulfillment 專用的後端 API 接收通道。負責即時接收 LINE 聊天室訊息、查詢 Firebase 資料庫並隨機抽選 5 間美食回傳。
+                        </p>
+                        <hr class="opacity-10">
+                        <div class="mt-auto">
+                            <div class="input-group mb-2">
+                                <span class="input-group-text bg-light text-muted"><i class="fas fa-link"></i></span>
+                                <input type="text" class="form-control bg-white text-secondary" value="/webhook" readonly>
+                            </div>
+                            <button class="btn btn-success btn-custom w-100 shadow-sm" disabled>
+                                <i class="fas fa-robot me-2"></i>LINE 機器人通道運行中
+                            </button>
+                            <small class="text-muted d-block text-center mt-2">此網址供 Dialogflow 後端對接使用</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <footer class="text-center my-5 text-muted opacity-75">
+            <p>© 2026 林建宇 (Lin Jian-Yu) - 靜宜資管系專案作品. All Rights Reserved.</p>
+        </footer>
+    </div>
+
+</body>
+</html>

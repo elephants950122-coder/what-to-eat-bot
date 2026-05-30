@@ -41,7 +41,7 @@ def safe_init_firebase():
 # ============================================================
 @app.route("/")
 def home():
-    return "<h1>🍱 沙鹿美食大數據後端伺服器</h1><p>狀態：雲端運行中</p>"
+    return render_template("index.html")
 
 # ============================================================
 # 📡 路由一：全自動歷史大數據爬蟲
@@ -125,7 +125,7 @@ def webhook():
     info = "抱歉，我目前無法處理這個動作喔！"
     
     if action == "recommend_restaurant":
-        info = "我是What-to-eat-bot，為您從資料庫動態篩選精選沙鹿美食：\n\n"
+        info = "我是What-to-eat-bot，已為您連線至後端 Firebase，從 PTT Food 板歷史大數據中隨機精選 5 間沙鹿在地好料：\n\n"
 
         try:
             # 💡 呼叫安全鎖，強制讓雲端直接讀取環境變數，不需要實體檔案
