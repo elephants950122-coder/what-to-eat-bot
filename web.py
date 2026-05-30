@@ -3,7 +3,7 @@ import json
 import random
 import time
 import urllib.parse
-import re  # 💡 引入正規表達式模組
+import re  # 正規表達式大殺器
 import requests
 from flask import Flask, request, jsonify, make_response, render_template
 from bs4 import BeautifulSoup
@@ -33,16 +33,21 @@ def safe_init_firebase():
             raise e
 
 # ============================================================
-# 🧼 終極符號終結者：只允許中英數，所有特殊符號、引號、箭頭強制蒸發
+# 🧼 終極符號與贅字終結者：徹底拔除「區」與所有殘留地名贅字
 # ============================================================
 def super_clean_title(raw_title):
-    # 1. 先把明顯的贅字全面剔除
-    name = raw_title.replace("食記", "").replace("台中", "").replace("沙鹿", "")
+    # 1. 先把明顯的贅字集合全面剔除
+    name = raw_title.replace("食記", "").replace("台中市", "").replace("台中", "").replace("沙鹿", "")
     
-    # 2. 💡 核心大絕招：利用正規表達式，只保留 中文字 (\u4e00-\u9fa5)、英文字母 (a-zA-Z)、數字 (0-9)
-    # 所有引號 ""、「」、、橫槓 -、特殊箭頭 →、空格，只要不在白名單內的通通直接變不見！
+    # 2. 核心白名單：利用正規表達式，只保留 中文字、英文字母、數字
     name = re.sub(r'[^\u4e00-\u9fa5a-zA-Z0-9]', '', name)
     
+    # 3. 💡 針對你發現的 Bug 進行硬核修剪：
+    # 如果因為順序關係，導致開頭殘留了「區」字或其他地區贅字，用迴圈強制切除開頭！
+    front_garbage = ["區", "市", "鎮", "鄉"]
+    while len(name) > 0 and name[0] in front_garbage:
+        name = name[1:] # 拔掉開頭第一個字，直到開頭不是這些垃圾字為止
+        
     return name.strip()
 
 # ============================================================
@@ -53,7 +58,7 @@ def home():
     return render_template("index.html")
 
 # ============================================================
-# 🛠️ 3. 專案救星：一鍵自動清洗、修正資料庫既有髒資料的隱藏路由
+# 🛠️ 2. 資料庫一鍵重洗修復路由 (包含修剪「區」字)
 # ============================================================
 @app.route("/repair_db")
 def repair_db():
@@ -61,29 +66,27 @@ def repair_db():
         safe_init_firebase()
         db = firestore.client()
         
-        # 撈出資料庫裡目前所有的餐廳資料
         docs = db.collection("restaurants").get()
         repaired_count = 0
         
         for doc in docs:
             data = doc.to_dict()
-            # 拿當初存的 ptt_title（原始標題）來重新進行最嚴格的清洗
             raw_title = data.get("ptt_title", "")
             if raw_title:
+                # 重新呼叫最強清洗器，把「區」字剪乾淨
                 perfect_name = super_clean_title(raw_title)
                 
-                # 將清洗後絕對乾淨的名稱，重新 update 回去覆蓋掉原本髒掉的 name 欄位
                 db.collection("restaurants").document(doc.id).update({
                     "name": perfect_name
                 })
                 repaired_count += 1
                 
-        return f"<h3>🚀 資料庫一鍵修復成功！</h3><p>共自動清洗並修正了 <b>{repaired_count}</b> 筆既有資料的 name 欄位！請回到首頁重新查看結果頁面。</p>"
+        return f"<h3>🚀 資料庫終極修復成功！</h3><p>共自動清洗並剪除了 <b>{repaired_count}</b> 筆既有資料的開頭贅字與區字！請重新查看結果頁面。</p>"
     except Exception as e:
         return f"❌ 修復過程中發生異常：{e}"
 
 # ============================================================
-# 📡 2. 爬蟲路由 (未來新資料防禦機制)
+# 📡 3. 爬蟲路由
 # ============================================================
 @app.route("/find_food")
 def find_food():
@@ -102,11 +105,7 @@ def find_food():
         db = firestore.client()
         
         existing_docs = db.collection("restaurants").get()
-        existing_titles = {}
-        for doc in existing_docs:
-            data = doc.to_dict()
-            if data.get("ptt_title"):
-                existing_titles[data.get("ptt_title")] = doc.id
+        existing_titles = {doc.to_dict().get("ptt_title"): doc.id for doc in existing_docs if doc.to_dict().get("ptt_title")}
         
         response = requests.get(url, headers=headers, cookies=cookies)
         if response.status_code == 200:
@@ -121,7 +120,6 @@ def find_food():
                     if "公告" in title_text or "[食記]" not in title_text:
                         continue
                     
-                    # 新資料強制通過過濾器
                     display_name = super_clean_title(title_text)
                     if not display_name: continue
                     
