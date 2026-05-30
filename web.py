@@ -125,7 +125,7 @@ def webhook():
     info = "抱歉，我目前無法處理這個動作喔！"
     
     if action == "recommend_restaurant":
-        info = "我是林建宇設計的機器人，為您從資料庫動態篩選精選沙鹿美食：\n\n"
+        info = "我是What-to-eat-bot，為您從資料庫動態篩選精選沙鹿美食：\n\n"
 
         try:
             # 💡 呼叫安全鎖，強制讓雲端直接讀取環境變數，不需要實體檔案
