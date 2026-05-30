@@ -1,145 +1,63 @@
 import os
+import json
 import random
-import time
-import urllib.parse
-import requests
 from flask import Flask, request, jsonify, make_response
-from bs4 import BeautifulSoup
 import firebase_admin
 from firebase_admin import credentials, firestore
 
 app = Flask(__name__)
 
 # ============================================================
-# 1. 初始化 Firebase
+# 🔑 初始化 Firebase (環境變數安全版)
 # ============================================================
 try:
     if not firebase_admin._apps:
-        # 請確保 serviceAccountKey.json 與此檔在同一資料夾
-        cred = credentials.Certificate("serviceAccountKey.json")
+        if "FIREBASE_KEY" in os.environ:
+            print("📡 偵測到雲端環境變數，正在解析金鑰...")
+            key_dict = json.loads(os.environ["FIREBASE_KEY"])
+            cred = credentials.Certificate(key_dict)
+        else:
+            print("🏠 偵測為本地環境，正在讀取 serviceAccountKey.json...")
+            cred = credentials.Certificate("serviceAccountKey.json")
+            
         firebase_admin.initialize_app(cred)
     db = firestore.client()
-    print("✅ [成功] Firebase 已經連線，專案：what-to-eat-bot")
+    print("✅ [成功] Firebase 已經連線成功！")
 except Exception as e:
     print(f"❌ [失敗] Firebase 初始化失敗: {e}")
 
-# ============================================================
-# 🏠 首頁路由：測試伺服器是否正常
-# ============================================================
 @app.route("/")
 def home():
-    return "<h1>🍱 沙鹿美食大數據伺服器</h1><p>狀態：運行中</p>"
+    return "<h1>🍱 沙鹿美食大數據伺服器</h1><p>狀態：雲端運行中</p>"
 
 # ============================================================
-# 📡 路由一：全自動爬蟲 (執行此網址會抓 PTT 資料存入 Firebase)
-# ============================================================
-@app.route("/find_food")
-def find_food():
-    location = "沙鹿"
-    encoded_location = urllib.parse.quote(location)
-    
-    # PTT Food板搜尋網址
-    url = f"https://www.ptt.cc/bbs/Food/search?q={encoded_location}"
-    cookies = {'over18': '1'}
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
-    
-    total_inserted = 0
-    page_count = 0
-    
-    try:
-        # 最多爬 5 頁，避免過久
-        while url and page_count < 5:
-            response = requests.get(url, headers=headers, cookies=cookies)
-            if response.status_code != 200: break
-                
-            soup = BeautifulSoup(response.text, 'html.parser')
-            articles = soup.find_all('div', class_='r-ent')
-            
-            if not articles: break
-                
-            for art in articles:
-                title_tag = art.find('div', class_='title')
-                if title_tag and title_tag.a:
-                    title_text = title_tag.a.text.strip()
-                    
-                    # 只抓取食記
-                    if "[食記]" not in title_text or "公告" in title_text:
-                        continue
-                    
-                    # 清洗店名
-                    clean_name = title_text.replace("[食記]", "").replace("台中", "").replace("沙鹿", "").strip()
-                    clean_name = clean_name.replace("/", "").replace("\\", "").replace(".", "")[:20]
-                    
-                    if not clean_name: continue
-                        
-                    simulated_rating = round(random.uniform(4.0, 4.9), 1)
-                    
-                    doc = {
-                        "name": clean_name,
-                        "ptt_title": title_text,
-                        "area": location,
-                        "rating": simulated_rating,
-                        "type": "美食",
-                        "source": "PTT Food板",
-                        "sync_time": firestore.SERVER_TIMESTAMP
-                    }
-                    
-                    # 寫入名為 "restaurants" 的集合
-                    db.collection("restaurants").add(doc)
-                    total_inserted += 1
-            
-            time.sleep(0.5)
-            page_count += 1
-            
-            # 找尋上一頁按鈕 (PTT 搜尋結果是倒序的)
-            btn_tags = soup.find_all('a', class_='btn wide')
-            url = None
-            for btn in btn_tags:
-                if "上頁" in btn.text and 'href' in btn.attrs:
-                    url = "https://www.ptt.cc" + btn['href']
-                    break
-                    
-        return f"✅ 爬取成功！共分析 {page_count} 頁，新增 {total_inserted} 筆資料至 Firebase。"
-    except Exception as e:
-        return f"❌ 爬蟲發生異常：{e}"
-
-# ============================================================
-# 🤖 路由二：Webhook (讓 LINE 機器人真正讀取資料庫)
+# 🤖 Webhook 核心修正版 (強固型態防錯)
 # ============================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
     req = request.get_json(force=True)
-    
-    # 這裡抓取的是 Dialogflow 中設定的 Action 名稱
     action = req.get("queryResult", {}).get("action", "")
     
-    # 終端機列印除錯資訊
-    print(f"\n[Incoming Request] Action: {action}")
-    
-    info = "抱歉，目前沒辦法找到美食資料。"
+    # 預設回覆
+    info = "抱歉，目前無法從資料庫獲取美食清單。"
 
-    # 1. 處理推薦餐廳動作
     if action == "recommend_restaurant":
-        print("-> 正在讀取 Firebase 資料...")
         try:
-            # 從你的 Firebase "restaurants" 集合抓取資料
+            # 從 Firebase 抓取所有資料
             docs = db.collection("restaurants").get()
             all_restaurants = [doc.to_dict() for doc in docs]
-            
-            print(f"-> 資料庫內共有 {len(all_restaurants)} 筆資料")
 
             if all_restaurants:
-                # 隨機挑選 5 家 (模仿電影機器人的多樣性)
+                # 隨機抽出 5 家店
                 sample_size = min(5, len(all_restaurants))
                 random_list = random.sample(all_restaurants, sample_size)
                 
-                result_text = "🔎 根據後端資料庫，為您精選沙鹿美食：\n\n"
+                result_text = "🔎 根據資料庫大數據，為您精選沙鹿美食：\n\n"
                 for index, item in enumerate(random_list, 1):
-                    name = item.get("name", "未知店家")
-                    rating = item.get("rating", "4.0")
-                    title = item.get("ptt_title", "無標題")
+                    # 💡 安全修正：使用 str() 包裹，防止 Number 型態導致字串拼接崩潰
+                    name = str(item.get("name", "未知店家"))
+                    rating = str(item.get("rating", "4.0"))
+                    title = str(item.get("ptt_title", "無標題"))
                     
                     result_text += f"🍱 推薦 {index}：{name}\n"
                     result_text += f"⭐ 鄉民評分：{rating}\n"
@@ -150,23 +68,27 @@ def webhook():
                 info = "📋 目前資料庫內沒資料，請先連線到 /find_food 進行爬取。"
                 
         except Exception as e:
-            info = "❌ 讀取資料庫時出錯。"
-            print(f"❌ [Error] 錯誤原因: {e}")
+            # 萬一真的又錯了，把真實的英文錯誤訊息直接噴在 Dialogflow 畫面上，方便我們一槍斃命
+            info = f"❌ 後端執行錯誤，原因: {str(e)}"
 
-    # 2. 處理列出所有餐廳清單動作 (如果有設定此 Intent)
     elif action == "GetFoodList":
         try:
             docs = db.collection("restaurants").get()
-            titles = [doc.to_dict().get("name") for doc in docs if doc.to_dict().get("name")]
+            titles = []
+            for doc in docs:
+                data = doc.to_dict()
+                if data and data.get("name"):
+                    titles.append(str(data.get("name")))
+                    
             if titles:
                 unique_titles = list(set(titles))
-                info = "📋 目前資料庫收錄的沙鹿美食：\n\n- " + "\n- ".join(unique_titles[:30]) # 最多列30個
+                info = "📋 目前資料庫收錄的沙鹿美食：\n\n- " + "\n- ".join(unique_titles[:30])
             else:
                 info = "資料庫目前沒有資料。"
         except Exception as e:
-            info = f"讀取清單失敗：{e}"
+            info = f"❌ 讀取清單失敗，原因: {str(e)}"
 
-    # 回傳給 Dialogflow (格式必須嚴格遵守)
+    # 包裝回傳
     response_data = {"fulfillmentText": info}
     res = make_response(jsonify(response_data))
     res.headers['Content-Type'] = 'application/json'
