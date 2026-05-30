@@ -32,32 +32,19 @@ def safe_init_firebase():
             raise e
 
 # ============================================================
-# 🧼 終極資料清洗器：精準斬斷所有形容詞與雜質，只留純店名
+# 🧼 依照你的需求設計的標題清洗器：移除 [食記] 及各式雙引號
 # ============================================================
-def clean_restaurant_name(raw_title):
-    # 1. 移除 PTT 基本標籤與地區
+def clean_ptt_title_for_name(raw_title):
+    # 移除 [食記]、台中、沙鹿 等基本標籤
     name = raw_title.replace("[食記]", "").replace("台中", "").replace("沙鹿", "")
     
-    # 2. 徹底拔除所有可能出現的特殊干擾符號與空格
-    garbage_symbols = ["-", "—", "[", "]", "【", "】", "(", ")", "（", "）", "～", "~", "：", ":", "/", "\\", "、", ".", " ", "  "]
-    for symbol in garbage_symbols:
+    # 拔除英文雙引號、英文單引號、中文雙引號、中文單引號
+    quotes_and_symbols = ['"', "'", "“", "”", "‘", "’", "「", "」", "『", "』"]
+    for symbol in quotes_and_symbols:
         name = name.replace(symbol, "")
         
-    # 3. 💡 關鍵切斷點：遇到以下食記常見的心得或贅詞，直接「只取左邊」，把右邊雜質一刀切斷！
-    cut_off_words = [
-        "吃到飽", "平價", "便當", "餐車", "火鍋", "創始店", "老店", "美食", "下午茶", 
-        "夜景", "景觀", "推薦", "早午餐", "宵夜", "小吃", "新開幕", "風味餐", "初訪"
-    ]
-    for word in cut_off_words:
-        if word in name:
-            name = name.split(word)[0] # 只留下贅詞前面的純店名
-            
-    name = name.strip()
-    
-    # 如果清洗完太短或太長，給予安全限制
-    if not name or len(name) <= 1:
-        return ""
-    return name[:10] # 正常店名通常在 10 個字以內
+    # 清除前後的多餘空格
+    return name.strip()
 
 # ============================================================
 # 🏠 1. 首頁路由
@@ -67,7 +54,7 @@ def home():
     return render_template("index.html")
 
 # ============================================================
-# 📡 2. 爬蟲路由 (超強模糊比對去重版)
+# 📡 2. 爬蟲路由 (改用 ptt_title 進行精準硬核去重)
 # ============================================================
 @app.route("/find_food")
 def find_food():
@@ -85,10 +72,13 @@ def find_food():
         safe_init_firebase()
         db = firestore.client()
         
-        # 先撈出目前資料庫裡「已經存在的所有餐廳」名單，用來做現場模糊比對
+        # 1. 先捞出目前資料庫裡所有已經存在文章的 ptt_title，存在集合裡加快比對速度
         existing_docs = db.collection("restaurants").get()
-        # 建立一個現存店名的字典 { "店名": "文件ID" }
-        existing_refs = {doc.to_dict().get("name"): doc.id for doc in existing_docs if doc.to_dict().get("name")}
+        existing_titles = {}
+        for doc in existing_docs:
+            data = doc.to_dict()
+            if data.get("ptt_title"):
+                existing_titles[data.get("ptt_title")] = doc.id
         
         response = requests.get(url, headers=headers, cookies=cookies)
         if response.status_code == 200:
@@ -103,17 +93,14 @@ def find_food():
                     if "公告" in title_text or "[食記]" not in title_text:
                         continue
                     
-                    # 💡 調用終極清洗器，產出極度純淨的店名 (例如：大喜鍋)
-                    clean_name = clean_restaurant_name(title_text)
+                    # 💡 依需求：將名稱設定為移除 [食記] 與雙引號後的乾淨標題
+                    display_name = clean_ptt_title_for_name(title_text)
                     
-                    if not clean_name: 
-                        continue
-                        
                     simulated_rating = round(random.uniform(4.0, 4.9), 1)
                     
                     doc = {
-                        "name": clean_name,
-                        "ptt_title": title_text,
+                        "name": display_name,         # 乾淨的文章標題（無[食記]、無引號）
+                        "ptt_title": title_text,       # 原始 PTT 標題（作為資料庫唯一識別）
                         "area": location,
                         "rating": simulated_rating,
                         "type": "美食",
@@ -121,22 +108,14 @@ def find_food():
                         "sync_time": firestore.SERVER_TIMESTAMP
                     }
                     
-                    # 💡 終極去重邏輯：檢查「新店名」是否與「現存店名」互相包含
-                    duplicate_id = None
-                    for ex_name, ex_id in existing_refs.items():
-                        # 如果新清洗出的名字包含在舊名字裡 (大喜鍋 inside 大喜鍋吃到飽)
-                        # 或者舊名字包含在新名字裡
-                        if clean_name in ex_name or ex_name in clean_name:
-                            duplicate_id = ex_id
-                            break
-                    
-                    if duplicate_id:
-                        # 判定為重複店家！直接覆蓋更新該筆文件，絕不疊加
-                        db.collection("restaurants").document(duplicate_id).update(doc)
+                    # 💡 2. 精準去重：直接比對原始文章標題 ptt_title
+                    if title_text in existing_titles:
+                        # 如果這篇文章早就爬過了，直接覆蓋更新舊數據，絕不疊加！
+                        dup_id = existing_titles[title_text]
+                        db.collection("restaurants").document(dup_id).update(doc)
                     else:
-                        # 確定是全新未見過的店家，直接 add，並把新名字加進比對字典中
-                        new_doc_ref = db.collection("restaurants").add(doc)
-                        existing_refs[clean_name] = new_doc_ref[1].id
+                        # 完全沒爬過的文章，安心新增
+                        db.collection("restaurants").add(doc)
                         total_inserted += 1
                         
         # 重新撈出最乾淨的結果清單
