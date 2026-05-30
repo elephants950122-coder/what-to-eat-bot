@@ -10,27 +10,34 @@ from firebase_admin import credentials, firestore
 
 app = Flask(__name__)
 
-# ============================================================
-# 🔑 1. 初始化 Firebase（完全比照你之前的電影專案寫法）
-# ============================================================
-try:
+# 💡 定義一個安全的初始化安全鎖，確保不管在哪個路由、哪個執行緒被呼叫，都能 100% 成功連線
+def safe_init_firebase():
     if not firebase_admin._apps:
-        # 直接讀取資料夾內的金鑰檔案
-        cred = credentials.Certificate("serviceAccountKey.json")
-        firebase_admin.initialize_app(cred)
-    print("✅ [成功] Firebase 雲端資料庫通道已打通！")
-except Exception as e:
-    print(f"❌ [失敗] Firebase 初始化失敗：{e}")
+        try:
+            # 確保讀取與 web.py 同資料夾底下的 serviceAccountKey.json
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            key_path = os.path.join(current_dir, "serviceAccountKey.json")
+            
+            # 如果預設路徑找不到，就降級讀取相對路徑
+            if not os.path.exists(key_path):
+                key_path = "serviceAccountKey.json"
+                
+            cred = credentials.Certificate(key_path)
+            firebase_admin.initialize_app(cred)
+            print("✅ [內部初始化] Firebase 雲端資料庫連線成功！")
+        except Exception as e:
+            print(f"❌ [內部初始化] 失敗：{e}")
+            raise e
 
 # ============================================================
-# 🏠 首頁路由：測試伺服器是否正常運作
+# 🏠 首頁路由
 # ============================================================
 @app.route("/")
 def home():
     return "<h1>🍱 沙鹿美食大數據後端伺服器</h1><p>狀態：雲端運行中</p>"
 
 # ============================================================
-# 📡 路由一：全自動歷史大數據爬蟲（保持不變）
+# 📡 路由一：全自動歷史大數據爬蟲
 # ============================================================
 @app.route("/find_food")
 def find_food():
@@ -46,16 +53,18 @@ def find_food():
     page_count = 1
     
     try:
+        # 確保 Firebase 在現場初始化成功
+        safe_init_firebase()
+        db = firestore.client()
+        
         while url and page_count <= 5:
             response = requests.get(url, headers=headers, cookies=cookies)
-            if response.status_code != 200:
-                break
+            if response.status_code != 200: break
                 
             soup = BeautifulSoup(response.text, 'html.parser')
             articles = soup.find_all('div', class_='r-ent')
             
-            if not articles:
-                break
+            if not articles: break
                 
             for art in articles:
                 title_tag = art.find('div', class_='title')
@@ -68,8 +77,7 @@ def find_food():
                     clean_name = title_text.replace("[食記]", "").replace("台中", "").replace("沙鹿", "").strip()
                     clean_name = clean_name.replace("/", "").replace("\\", "").replace(".", "")[:20]
                     
-                    if not clean_name:
-                        continue
+                    if not clean_name: continue
                         
                     simulated_rating = round(random.uniform(4.0, 4.9), 1)
                     
@@ -83,8 +91,6 @@ def find_food():
                         "sync_time": firestore.SERVER_TIMESTAMP
                     }
                     
-                    # 💡 電影寫法：進入函式內呼叫 client()
-                    db = firestore.client()
                     db.collection("restaurants").add(doc)
                     total_inserted += 1
             
@@ -103,24 +109,25 @@ def find_food():
         return f"❌ 發生異常：{e}"
 
 # ============================================================
-# 🤖 路由二：Webhook（完全比照電影專案內連線與比對的架構）
+# 🤖 路由二：Webhook (精準解決 default app 不存在問題)
 # ============================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    # 取得 Dialogflow 傳來的請求資料
     req = request.get_json(force=True)
     action = req.get("queryResult", {}).get("action", "")
     
-    # 設定一個預設回覆
     info = "抱歉，我目前無法處理這個動作喔！"
     
     if action == "recommend_restaurant":
         info = "我是林建宇設計的機器人，為您從資料庫動態篩選精選沙鹿美食：\n\n"
 
         try:
-            # 💡 完全複製電影機器人的連線步驟
+            # 💡 核心修正：進來第一件事先調用安全鎖，確保 App 100% 存在
+            safe_init_firebase()
+            
+            # 連線與撈取資料
             db = firestore.client()
-            collection_ref = db.collection("restaurants") # 指向你的美食大數據集合
+            collection_ref = db.collection("restaurants")
             docs = collection_ref.get()
             
             all_restaurants = []
@@ -128,13 +135,12 @@ def webhook():
                 all_restaurants.append(doc.to_dict())
             
             if all_restaurants:
-                # 從龐大的大數據中，隨機抽出 5 家店出來列表
+                # 隨機抽出 5 家店
                 sample_size = min(5, len(all_restaurants))
                 random_list = random.sample(all_restaurants, sample_size)
                 
                 result = ""
                 for index, movie_data in enumerate(random_list, 1):
-                    # 安全轉成字串，取出你 Firebase 內的 name、rating、ptt_title 欄位
                     name = str(movie_data.get("name", ""))
                     rating = str(movie_data.get("rating", "4.0"))
                     title = str(movie_data.get("ptt_title", ""))
@@ -152,6 +158,7 @@ def webhook():
 
     elif action == "GetFoodList":
         try:
+            safe_init_firebase()
             db = firestore.client()
             collection_ref = db.collection("restaurants")
             docs = collection_ref.get()
@@ -170,7 +177,6 @@ def webhook():
         except Exception as e:
             info = f"❌ 讀取清單失敗，原因: {str(e)}"
 
-    # 💡 完全比照電影機器人最後的 make_response(jsonify(...)) 格式回傳
     return make_response(jsonify({"fulfillmentText": info}))
 
 if __name__ == "__main__":
