@@ -135,16 +135,18 @@ def find_food():
 # ============================================================
 # 🤖 3. Webhook 通道
 # ============================================================
+# ============================================================
+# 🤖 Webhook 通道 (智慧聯想分類防翻車版)
+# ============================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
     req = request.get_json(force=True)
     query_result = req.get("queryResult", {})
     action = query_result.get("action", "")
     
-    # 💡 關鍵：同時撈取 location（地點）與 food_type（分類，可能是宵夜、下午茶或空值）
     parameters = query_result.get("parameters", {})
     user_location = parameters.get("location", "沙鹿")
-    user_food_type = parameters.get("food_type", "") # 如果使用者沒講，這就是空字串
+    user_food_type = parameters.get("food_type", "") 
     
     info = "抱歉，我目前無法處理這個動作喔！"
     
@@ -156,18 +158,36 @@ def webhook():
             all_restaurants = [doc.to_dict() for doc in docs]
             
             if all_restaurants:
-                # 💡 智慧篩選機制：
-                # 1. 優先篩選地點（例如：沙鹿）
+                # 第一層：精準鎖定地區 (如：沙鹿)
                 filtered_list = [r for r in all_restaurants if r.get("area") == user_location]
                 
-                # 2. 如果使用者有指定分類（例如：宵夜），我們就去 PTT 原始標題裡比對有沒有包含「宵夜」兩個字！
-                if user_food_type:
-                    filtered_list = [r for r in filtered_list if user_food_type in r.get("ptt_title", "")]
-                    info = f"🤖 這是建宇的美食機器人！已為您從 Firebase 大數據中，精選出符合【{user_location}】且屬於【{user_food_type}】的在地好料：\n\n"
+                # 第二層：定義智慧分類代號對應的關鍵字白名單
+                # 這樣就算 PTT 標題沒寫「下午茶」，只要有「蛋糕」或「甜點」也 100% 會被歸類過來！
+                type_keywords = {
+                    "宵夜": ["宵夜", "宵夜", "深夜", "燒烤", "串燒", "酒吧", "永和豆漿"],
+                    "下午茶": ["下午茶", "點心", "蛋糕", "甜點", "咖啡", "冰品", "豆花", "手搖", "麵包", "烘焙"],
+                    "早午餐": ["早午餐", "早餐", "BRUNCH", "蛋餅", "吐司", "漢堡", "飯糰"]
+                }
+                
+                # 如果使用者有指定分類，啟動白名單模糊搜尋機制
+                if user_food_type and user_food_type in type_keywords:
+                    keywords = type_keywords[user_food_type]
+                    
+                    # 檢查這家餐廳的原始 PTT 標題有沒有命中任何一個分類關鍵字
+                    category_matched_list = []
+                    for r in filtered_list:
+                        title_upper = r.get("ptt_title", "").upper()
+                        # 只要標題裡包含白名單中的任一個詞，就納入推薦
+                        if any(kw in title_upper for kw in keywords):
+                            category_matched_list.append(r)
+                            
+                    filtered_list = category_matched_list
+                    info = f"🤖 這是建宇的美食機器人！已為您連線 Firebase，從小組專屬大數據庫中精選出符合【{user_location} {user_food_type}】的口袋名單：\n\n"
                 else:
+                    # 如果使用者沒講種類，或者講了我們沒定義的種類，就維持一般的隨機美味推薦
                     info = f"🤖 這是建宇的美食機器人！已為您從 Firebase 大數據中，隨機精選 5 間【{user_location}】在地好料：\n\n"
                 
-                # 如果篩選完後還有資料，就隨機抽 5 筆
+                # 抽取最多 5 筆回傳
                 if filtered_list:
                     sample_size = min(5, len(filtered_list))
                     random_list = random.sample(filtered_list, sample_size)
@@ -181,7 +201,7 @@ def webhook():
                     
                     info += result + "祝您用餐愉快！😋"
                 else:
-                    info = f"📋 抱歉，目前大數據庫中暫時沒有關於【{user_location} {user_food_type}】的相關食記資料，建議您先去管理後台擴大爬取範圍喔！"
+                    info = f"📋 報告！目前建宇的 Firebase 大數據庫中，暫時還沒有關於【{user_location} {user_food_type}】的精確食記。我會提醒建宇趕快去後台點擊爬蟲更新！"
             else:
                 info = "📋 目前資料庫內暫無美食資料，請先前往管理後端進行網頁爬取同步！"
         except Exception as e:
