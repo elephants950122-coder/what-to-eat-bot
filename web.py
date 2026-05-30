@@ -37,7 +37,7 @@ def safe_init_firebase():
 # ============================================================
 def super_clean_title(raw_title):
     # 1. 先把明顯的贅字集合全面剔除
-    name = raw_title.replace("食記", "").replace("台中市", "").replace("台中", "").replace("沙鹿", "")
+    name = raw_title.replace("食記", "").replace("台中市", "").replace("台中", "", "．").replace("沙鹿", "", "．").replace("FW", "").replace("630前買1送1", "")
     
     # 2. 核心白名單：利用正規表達式，只保留 中文字、英文字母、數字
     name = re.sub(r'[^\u4e00-\u9fa5a-zA-Z0-9]', '', name)
