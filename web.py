@@ -36,7 +36,7 @@ def safe_init_firebase():
 # 🧼 終極符號終結者：只允許中英數，所有特殊符號、引號、箭頭強制蒸發
 # ============================================================
 def super_clean_title(raw_title):
-    # 1. 先把明顯的贅字全面剔除（不管它有沒有帶括號）
+    # 1. 先把明顯的贅字全面剔除
     name = raw_title.replace("食記", "").replace("台中", "").replace("沙鹿", "")
     
     # 2. 💡 核心大絕招：利用正規表達式，只保留 中文字 (\u4e00-\u9fa5)、英文字母 (a-zA-Z)、數字 (0-9)
@@ -53,7 +53,37 @@ def home():
     return render_template("index.html")
 
 # ============================================================
-# 📡 2. 爬蟲路由 (符號終結 + 硬核去重)
+# 🛠️ 3. 專案救星：一鍵自動清洗、修正資料庫既有髒資料的隱藏路由
+# ============================================================
+@app.route("/repair_db")
+def repair_db():
+    try:
+        safe_init_firebase()
+        db = firestore.client()
+        
+        # 撈出資料庫裡目前所有的餐廳資料
+        docs = db.collection("restaurants").get()
+        repaired_count = 0
+        
+        for doc in docs:
+            data = doc.to_dict()
+            # 拿當初存的 ptt_title（原始標題）來重新進行最嚴格的清洗
+            raw_title = data.get("ptt_title", "")
+            if raw_title:
+                perfect_name = super_clean_title(raw_title)
+                
+                # 將清洗後絕對乾淨的名稱，重新 update 回去覆蓋掉原本髒掉的 name 欄位
+                db.collection("restaurants").document(doc.id).update({
+                    "name": perfect_name
+                })
+                repaired_count += 1
+                
+        return f"<h3>🚀 資料庫一鍵修復成功！</h3><p>共自動清洗並修正了 <b>{repaired_count}</b> 筆既有資料的 name 欄位！請回到首頁重新查看結果頁面。</p>"
+    except Exception as e:
+        return f"❌ 修復過程中發生異常：{e}"
+
+# ============================================================
+# 📡 2. 爬蟲路由 (未來新資料防禦機制)
 # ============================================================
 @app.route("/find_food")
 def find_food():
@@ -71,7 +101,6 @@ def find_food():
         safe_init_firebase()
         db = firestore.client()
         
-        # 撈出目前資料庫裡所有資料，建立比對字典
         existing_docs = db.collection("restaurants").get()
         existing_titles = {}
         for doc in existing_docs:
@@ -92,17 +121,15 @@ def find_food():
                     if "公告" in title_text or "[食記]" not in title_text:
                         continue
                     
-                    # 💡 呼叫終極符號終結者
+                    # 新資料強制通過過濾器
                     display_name = super_clean_title(title_text)
-                    
-                    if not display_name:
-                        continue
+                    if not display_name: continue
                     
                     simulated_rating = round(random.uniform(4.0, 4.9), 1)
                     
                     doc = {
-                        "name": display_name,         # 絕對純淨的中英數名稱
-                        "ptt_title": title_text,       # 原始 PTT 標題（作為唯一比對鍵）
+                        "name": display_name,
+                        "ptt_title": title_text,
                         "area": location,
                         "rating": simulated_rating,
                         "type": "美食",
@@ -110,7 +137,6 @@ def find_food():
                         "sync_time": firestore.SERVER_TIMESTAMP
                     }
                     
-                    # 精準去重
                     if title_text in existing_titles:
                         dup_id = existing_titles[title_text]
                         db.collection("restaurants").document(dup_id).update(doc)
@@ -118,7 +144,6 @@ def find_food():
                         db.collection("restaurants").add(doc)
                         total_inserted += 1
                         
-        # 重新撈出最乾淨的結果清單
         docs = db.collection("restaurants").order_by("sync_time", direction=firestore.Query.DESCENDING).get()
         restaurant_list = [doc.to_dict() for doc in docs]
         total_in_db = len(restaurant_list)
@@ -129,7 +154,7 @@ def find_food():
         return f"❌ 系統發生異常：{e}"
 
 # ============================================================
-# 🤖 3. Webhook 通道
+# 🤖 Webhook 通道
 # ============================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
