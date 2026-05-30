@@ -16,7 +16,7 @@
         .card:hover { transform: translateY(-5px); }
         .status-badge { font-size: 0.9rem; padding: 6px 12px; border-radius: 20px; }
         .btn-custom { border-radius: 10px; padding: 12px 20px; font-weight: bold; font-size: 1.05rem; transition: all 0.3s; }
-        .qrcode-box { background-color: #fdfdfd; border: 1px dashed #2ecc71; border-radius: 12px; padding: 15px; }
+        .qrcode-box { background-color: #fdfdfd; border: 1px dashed #2ecc71; border-radius: 12px; padding: 20px; }
     </style>
 </head>
 <body>
@@ -74,7 +74,7 @@
                         </p>
                         <hr class="opacity-10">
                         <div class="mt-auto">
-                            <a href="/webdamo" class="btn btn-info text-white btn-custom w-100 shadow-sm">
+                            <a href="/chat" class="btn btn-info text-white btn-custom w-100 shadow-sm">
                                 <i class="fas fa-comments me-2"></i>進入網頁版模擬測試
                             </a>
                             <small class="text-muted d-block text-center mt-2">點擊開啟全螢幕獨立聊天室</small>
@@ -90,18 +90,19 @@
                             <i class="fab fa-line text-success me-2"></i>LINE 行動版好友入口
                         </h3>
                         <p class="card-text text-muted mb-3">
-                            本專案已透過 Webhook 機制完整對接 LINE 官方訊息接口。手機用戶請直接掃描下方 QR Code，或點擊綠色專屬連結加入好友即可進行行動端實測。
+                            本專案已完全對接 LINE 官方訊息接口。由於開發測試帳號限制，請複製下方專屬 ID，至 LINE 的「搜尋好友」中貼出搜尋，即可加入好友開始實測！
                         </p>
                         
                         <div class="qrcode-box text-center mb-3">
-                            <img src="https://placehold.co/120x120/2ecc71/ffffff?text=LINE+QR+Code" alt="LINE QR Code" class="img-fluid shadow-sm mb-2" style="max-height: 110px; border-radius: 8px;">
-                            <div class="small fw-bold text-success"><i class="fas fa-qrcode me-1"></i>現場手機掃碼加好友</div>
+                            <div class="fs-5 text-secondary fw-bold mb-2"><i class="fas fa-search-plus me-1"></i>機器人專屬帳號</div>
+                            <div class="bg-light text-dark border p-3 font-monospace fs-5 fw-bold rounded shadow-sm mb-1" id="lineIdText">@021aeycz</div>
+                            <div class="small fw-bold text-muted mt-2"><i class="fas fa-info-circle me-1"></i>點擊下方按鈕將自動複製 ID</div>
                         </div>
 
                         <div class="mt-auto">
-                            <a href="https://line.me" target="_blank" class="btn btn-success btn-custom w-100 shadow-sm">
-                                <i class="fab fa-line me-2"></i>一鍵點擊加入 LINE 機器人
-                            </a>
+                            <button onclick="copyLineId()" class="btn btn-success btn-custom w-100 shadow-sm" id="lineCopyBtn">
+                                <i class="fas fa-copy me-2"></i>點擊複製機器人 ID
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -127,6 +128,7 @@
     <script>
         document.getElementById("webhookUrl").value = window.location.origin + "/webhook";
 
+        // Webhook 地址複製腳本
         function copyWebhook() {
             var copyText = document.getElementById("webhookUrl");
             copyText.select();
@@ -136,6 +138,21 @@
             document.getElementById("btnText").innerHTML = "<i class='fas fa-check'></i> 成功";
             setTimeout(function(){
                 document.getElementById("btnText").innerHTML = "<i class='fas fa-copy'></i> 複製";
+            }, 2000);
+        }
+
+        // 💡 新增：LINE ID 一鍵複製與狀態倒數切換腳本
+        function copyLineId() {
+            var idText = document.getElementById("lineIdText").innerText;
+            navigator.clipboard.writeText(idText);
+            
+            var btn = document.getElementById("lineCopyBtn");
+            btn.className = "btn btn-dark btn-custom w-100 shadow-sm"; // 變更顏色提示使用者
+            btn.innerHTML = "<i class='fas fa-check-circle me-2'></i>📋 複製 ID 成功！";
+            
+            setTimeout(function(){
+                btn.className = "btn btn-success btn-custom w-100 shadow-sm";
+                btn.innerHTML = "<i class='fas fa-copy me-2'></i>點擊複製機器人 ID";
             }, 2000);
         }
     </script>
