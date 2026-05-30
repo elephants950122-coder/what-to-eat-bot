@@ -32,25 +32,32 @@ def safe_init_firebase():
             raise e
 
 # ============================================================
-# 🧼 核心優化：強力資料清洗器 (只保留純粹店名)
+# 🧼 終極資料清洗器：精準斬斷所有形容詞與雜質，只留純店名
 # ============================================================
 def clean_restaurant_name(raw_title):
-    # 移除 PTT 常見標籤與地區贅字
+    # 1. 移除 PTT 基本標籤與地區
     name = raw_title.replace("[食記]", "").replace("台中", "").replace("沙鹿", "")
     
-    # 定義要徹底清除的干擾符號清單
-    garbage_symbols = ["-", "—", "[", "]", "【", "】", "(", ")", "（", "）", "～", "~", "：", ":", "/", "\\", "、", "."]
+    # 2. 徹底拔除所有可能出現的特殊干擾符號與空格
+    garbage_symbols = ["-", "—", "[", "]", "【", "】", "(", ")", "（", "）", "～", "~", "：", ":", "/", "\\", "、", ".", " ", "  "]
     for symbol in garbage_symbols:
         name = name.replace(symbol, "")
         
-    # 移除常見的開頭贅詞，精準鎖定店名
-    noise_words = ["美食", "下午茶", "景觀餐廳", "夜景很漂亮", "美食推薦", "在地老店", "巷子裡歷史悠久的老店"]
-    for word in noise_words:
-        name = name.replace(word, "")
-        
-    # 徹底清除首尾及內部多餘空格，並限制長度
-    name = name.strip().replace(" ", "")
-    return name[:15]
+    # 3. 💡 關鍵切斷點：遇到以下食記常見的心得或贅詞，直接「只取左邊」，把右邊雜質一刀切斷！
+    cut_off_words = [
+        "吃到飽", "平價", "便當", "餐車", "火鍋", "創始店", "老店", "美食", "下午茶", 
+        "夜景", "景觀", "推薦", "早午餐", "宵夜", "小吃", "新開幕", "風味餐", "初訪"
+    ]
+    for word in cut_off_words:
+        if word in name:
+            name = name.split(word)[0] # 只留下贅詞前面的純店名
+            
+    name = name.strip()
+    
+    # 如果清洗完太短或太長，給予安全限制
+    if not name or len(name) <= 1:
+        return ""
+    return name[:10] # 正常店名通常在 10 個字以內
 
 # ============================================================
 # 🏠 1. 首頁路由
@@ -60,7 +67,7 @@ def home():
     return render_template("index.html")
 
 # ============================================================
-# 📡 2. 爬蟲路由 (內建雲端資料庫覆蓋、去重、強力清洗)
+# 📡 2. 爬蟲路由 (超強模糊比對去重版)
 # ============================================================
 @app.route("/find_food")
 def find_food():
@@ -73,20 +80,21 @@ def find_food():
     }
     
     total_inserted = 0
-    page_count = 1
     
     try:
         safe_init_firebase()
         db = firestore.client()
         
-        while url and page_count <= 3:
-            response = requests.get(url, headers=headers, cookies=cookies)
-            if response.status_code != 200: break
-                
+        # 先撈出目前資料庫裡「已經存在的所有餐廳」名單，用來做現場模糊比對
+        existing_docs = db.collection("restaurants").get()
+        # 建立一個現存店名的字典 { "店名": "文件ID" }
+        existing_refs = {doc.to_dict().get("name"): doc.id for doc in existing_docs if doc.to_dict().get("name")}
+        
+        response = requests.get(url, headers=headers, cookies=cookies)
+        if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
             articles = soup.find_all('div', class_='r-ent')
-            if not articles: break
-                
+            
             for art in articles:
                 title_tag = art.find('div', class_='title')
                 if title_tag and title_tag.a:
@@ -95,10 +103,10 @@ def find_food():
                     if "公告" in title_text or "[食記]" not in title_text:
                         continue
                     
-                    # 💡 調用強力清洗器，剔除 [ ] - 等所有髒符號
+                    # 💡 調用終極清洗器，產出極度純淨的店名 (例如：大喜鍋)
                     clean_name = clean_restaurant_name(title_text)
                     
-                    if not clean_name or len(clean_name) <= 1: 
+                    if not clean_name: 
                         continue
                         
                     simulated_rating = round(random.uniform(4.0, 4.9), 1)
@@ -113,31 +121,25 @@ def find_food():
                         "sync_time": firestore.SERVER_TIMESTAMP
                     }
                     
-                    # 💡 關鍵去重邏輯：檢查 Firebase 裡是不是早就存在這家店了
-                    # 用 .where("name", "==", clean_name) 來查詢
-                    existing_docs = db.collection("restaurants").where("name", "==", clean_name).get()
+                    # 💡 終極去重邏輯：檢查「新店名」是否與「現存店名」互相包含
+                    duplicate_id = None
+                    for ex_name, ex_id in existing_refs.items():
+                        # 如果新清洗出的名字包含在舊名字裡 (大喜鍋 inside 大喜鍋吃到飽)
+                        # 或者舊名字包含在新名字裡
+                        if clean_name in ex_name or ex_name in clean_name:
+                            duplicate_id = ex_id
+                            break
                     
-                    if len(existing_docs) > 0:
-                        # 找到了！代表資料重覆，我們直接「覆蓋更新」第一筆找到的資料
-                        doc_id = existing_docs[0].id
-                        db.collection("restaurants").document(doc_id).update(doc)
-                        # 更新就不算在「全新新增」的筆數裡
+                    if duplicate_id:
+                        # 判定為重複店家！直接覆蓋更新該筆文件，絕不疊加
+                        db.collection("restaurants").document(duplicate_id).update(doc)
                     else:
-                        # 沒找到！代表是新店家，直接 add 新增
-                        db.collection("restaurants").add(doc)
+                        # 確定是全新未見過的店家，直接 add，並把新名字加進比對字典中
+                        new_doc_ref = db.collection("restaurants").add(doc)
+                        existing_refs[clean_name] = new_doc_ref[1].id
                         total_inserted += 1
-            
-            time.sleep(0.3)
-            page_count += 1
-            
-            btn_tags = soup.find_all('a', class_='btn wide')
-            url = None
-            for btn in btn_tags:
-                if "上頁" in btn.text and 'href' in btn.attrs:
-                    url = "https://www.ptt.cc" + btn['href']
-                    break
-                    
-        # 撈出不重複的所有美食清單展示
+                        
+        # 重新撈出最乾淨的結果清單
         docs = db.collection("restaurants").order_by("sync_time", direction=firestore.Query.DESCENDING).get()
         restaurant_list = [doc.to_dict() for doc in docs]
         total_in_db = len(restaurant_list)
