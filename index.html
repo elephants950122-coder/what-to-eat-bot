@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>沙鹿美食大數據管理後台</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { background-color: #f8f9fa; font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; padding-top: 56px; }
+        .navbar-brand { font-weight: bold; font-size: 1.25rem; }
+        .hero-section { background: linear-gradient(135deg, #2c3e50, #18bc9c); color: white; padding: 40px 0; border-radius: 0 0 20px 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .title-link { color: white; text-decoration: none; }
+        .title-link:hover { color: #18bc9c; }
+        .card { border: none; border-radius: 15px; box-shadow: 0 6px 18px rgba(0,0,0,0.05); transition: transform 0.2s; }
+        .card:hover { transform: translateY(-5px); }
+        .status-badge { font-size: 0.9rem; padding: 6px 12px; border-radius: 20px; }
+        .btn-custom { border-radius: 10px; padding: 10px 20px; font-weight: bold; }
+        
+        /* 💡 網頁右下角客服型浮動聊天視窗 */
+        .chat-bot-container { 
+            position: fixed; 
+            bottom: 20px; 
+            right: 20px; 
+            z-index: 1000; 
+            box-shadow: 0 12px 36px rgba(0,0,0,0.2); 
+            border-radius: 16px; 
+            overflow: hidden; 
+            background: #fff;
+            border: 1px solid #e0e0e0;
+        }
+        .qrcode-box { background-color: #fdfdfd; border: 1px dashed #ced4da; border-radius: 10px; padding: 15px; }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top shadow-sm">
+        <div class="container">
+            <a class="navbar-brand" href="/"><i class="fas fa-utensils text-success me-2"></i>沙鹿美食大數據</a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link active fw-bold" href="/"><i class="fas fa-home me-1"></i>回到首頁</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="hero-section text-center mb-5">
+        <div class="container">
+            <h1 class="display-5 fw-bold mb-2">
+                <a href="/" class="title-link"><i class="fas fa-database me-3"></i>沙鹿美食大數據管理系統</a>
+            </h1>
+            <p class="lead opacity-75">靜宜大學 資管系期末專案成果展示</p>
+            <span class="badge bg-success status-badge shadow-sm"><i class="fas fa-check-circle me-1"></i> 雲端伺服器 正常運行中</span>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="row g-4 justify-content-center mb-5">
+            
+            <div class="col-md-5">
+                <div class="card h-100 p-4">
+                    <div class="card-body d-flex flex-column">
+                        <h3 class="card-title fw-bold text-dark mb-3">
+                            <i class="fas fa-spider text-primary me-2"></i>PTT 大數據爬蟲引擎
+                        </h3>
+                        <p class="card-text text-muted flex-grow-1">
+                            自動前往 PTT Food 板搜刮所有關於「沙鹿」的歷史食記。經過後端系統清洗、篩選店名並模擬評分後，全自動灌入 Firebase 雲端資料庫。
+                        </p>
+                        <hr class="opacity-10">
+                        <div class="mt-auto">
+                            <a href="/find_food" class="btn btn-primary btn-custom w-100 shadow-sm">
+                                <i class="fas fa-play me-2"></i>立即執行全自動爬蟲同步
+                            </a>
+                            <small class="text-muted d-block text-center mt-2">點擊將會觸發 PTT 資料同步並展示清單</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-5">
+                <div class="card h-100 p-4">
+                    <div class="card-body d-flex flex-column">
+                        <h3 class="card-title fw-bold text-dark mb-3">
+                            <i class="fab fa-line text-success me-2"></i>LINE 智慧機器人入口
+                        </h3>
+                        <p class="card-text text-muted mb-3">
+                            本系統已完全對接 Dialogflow 與 LINE 聊天室。網頁端使用者可直接透過右下角視窗免登入對話；行動裝置用戶可掃描下方 QR Code 加入 LINE 好友測試！
+                        </p>
+                        
+                        <div class="qrcode-box text-center mb-3">
+                            <img src="https://qr-official.line.me/sid/M/YOUR_LINE_ID.png" alt="LINE QR Code" class="img-fluid mb-2 shadow-sm" style="max-height: 130px; border-radius: 8px; fallback: url('https://placehold.co/130x130?text=LINE+QR+Code')">
+                            <div class="small fw-bold text-success"><i class="fas fa-qrcode me-1"></i>掃描上方條碼加入 LINE 測試</div>
+                        </div>
+
+                        <div class="mt-auto">
+                            <div class="input-group mb-2">
+                                <span class="input-group-text bg-light text-muted"><i class="fas fa-link"></i></span>
+                                <input type="text" id="webhookUrl" class="form-control bg-white text-secondary" value="" readonly>
+                            </div>
+                            <button onclick="copyWebhook()" class="btn btn-success btn-custom w-100 shadow-sm">
+                                <i class="fas fa-copy me-2"></i><span id="btnText">點擊複製 Webhook 完整網址</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="chat-bot-container d-none d-md-block">
+            <iframe 
+                allow="microphone;" 
+                width="350" 
+                height="430" 
+                src="https://console.dialogflow.com/api-client/demo/embedded/76d615d9-a37a-42dc-83b0-612a4dd0e618">
+            </iframe>
+        </div>
+
+        <footer class="text-center my-5 text-muted opacity-75">
+            <p>© 2026 林建宇 (Lin Jian-Yu) - 靜宜資管系專案作品. All Rights Reserved.</p>
+        </footer>
+    </div>
+
+    <script>
+        document.getElementById("webhookUrl").value = window.location.origin + "/webhook";
+
+        function copyWebhook() {
+            var copyText = document.getElementById("webhookUrl");
+            copyText.select();
+            copyText.setSelectionRange(0, 99999);
+            navigator.clipboard.writeText(copyText.value);
+            
+            document.getElementById("btnText").innerText = "📋 複製成功！";
+            setTimeout(function(){
+                document.getElementById("btnText").innerText = "點擊複製 Webhook 完整網址";
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
