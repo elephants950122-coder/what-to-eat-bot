@@ -39,21 +39,16 @@ def super_clean_title(raw_title):
     if not raw_title:
         return ""
         
-    # 1. 轉成大寫，這樣不論是 fw 還是 FW 都能精準刪除
     name = raw_title.upper()
-    
-    # 2. 先把明顯的贅字集合全面剔除
     name = name.replace("[食記]", "").replace("食記", "")\
                .replace("台中市", "").replace("台中", "")\
                .replace("沙鹿區", "").replace("沙鹿", "")\
                .replace("FW:", "").replace("FW", "")\
                .replace("630前買1送1", "")
     
-    # 3. 💡 核心大絕招：利用正規表達式，只保留 中文字、英文字母、數字
-    # 所有「．」、句號「。」、逗號「，」、引號、空格通通在這一行直接人間蒸發！
+    # 只保留 中文字、英文字母、數字
     name = re.sub(r'[^\u4e00-\u9fa5A-Z0-9]', '', name)
     
-    # 4. 如果開頭不幸還是殘留了地名贅字，用迴圈強制切除開頭
     front_garbage = ["區", "市", "鎮", "鄉"]
     while len(name) > 0 and name[0] in front_garbage:
         name = name[1:]
@@ -61,14 +56,21 @@ def super_clean_title(raw_title):
     return name.strip()
 
 # ============================================================
-# 🏠 1. 首頁路由
+# 🏠 1. 首頁管理後台路由
 # ============================================================
 @app.route("/")
 def home():
     return render_template("index.html")
 
 # ============================================================
-# 📡 2. 爬蟲路由 (全新架構：使用乾淨店名作為唯一 Document ID)
+# 🤖 2. 網頁免登入對話測試端點 (連向你的獨立 webdemo 頁面)
+# ============================================================
+@app.route("/webdamo")
+def chat_page():
+    return render_template("webdamo.html")
+
+# ============================================================
+# 📡 3. 爬蟲同步路由
 # ============================================================
 @app.route("/find_food")
 def find_food():
@@ -99,9 +101,7 @@ def find_food():
                     if "公告" in title_text or "[食記]" not in title_text:
                         continue
                     
-                    # 💡 呼叫終極過濾，此時 display_name 只會剩下純中英數（例如：鮮肉湯包搬家了）
                     display_name = super_clean_title(title_text)
-                    
                     if not display_name or len(display_name) <= 1: 
                         continue
                     
@@ -117,12 +117,10 @@ def find_food():
                         "sync_time": firestore.SERVER_TIMESTAMP
                     }
                     
-                    # 💡 【核心重構】直接用「純淨店名」當作 Document ID
-                    # 如果該店名已存在，.set(doc) 會直接 100% 強制覆蓋舊資料！絕不重複！
+                    # 直接用純淨店名當作 Document ID 強制蓋寫去重
                     db.collection("restaurants").document(display_name).set(doc)
                     total_inserted += 1
                         
-        # 撈出最乾淨的結果清單
         docs = db.collection("restaurants").order_by("sync_time", direction=firestore.Query.DESCENDING).get()
         restaurant_list = [doc.to_dict() for doc in docs]
         total_in_db = len(restaurant_list)
@@ -133,13 +131,7 @@ def find_food():
         return f"❌ 系統發生異常：{e}"
 
 # ============================================================
-# 🤖 3. Webhook 通道
-# ============================================================
-# ============================================================
-# 🤖 Webhook 通道 (智慧聯想分類防翻車版)
-# ============================================================
-# ============================================================
-# 🤖 Webhook 通道 (內建 Dialogflow 結構化地理參數解析鎖)
+# 🤖 4. Webhook 通道 (具備地理字典拆解與智慧聯想分類)
 # ============================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -149,23 +141,18 @@ def webhook():
     
     parameters = query_result.get("parameters", {})
     
-    # 💡 核心修正：安全拆解 Dialogflow 丟過來的地理物件
+    # 拆解 Dialogflow 丟過來的地理物件字典
     raw_location = parameters.get("location", "沙鹿")
-    
     if isinstance(raw_location, dict):
-        # 如果是字典，優先撈取行政區 (如：沙鹿區) 或城市名，並統一拔掉「區」或「市」字以匹配資料庫
         loc_str = raw_location.get("subadmin-area") or raw_location.get("city") or raw_location.get("admin-area") or "沙鹿"
         user_location = loc_str.replace("區", "").replace("市", "").strip()
     else:
-        # 如果本來就是字串，直接拿來用並拔掉「區」字
         user_location = str(raw_location).replace("區", "").replace("市", "").strip()
         
-    # 如果最後解析出來是空的，給予安全備案
     if not user_location:
         user_location = "沙鹿"
 
     user_food_type = parameters.get("food_type", "") 
-    
     info = "抱歉，我目前無法處理這個動作喔！"
     
     if action == "recommend_restaurant":
@@ -176,20 +163,16 @@ def webhook():
             all_restaurants = [doc.to_dict() for doc in docs]
             
             if all_restaurants:
-                # 第一層：精準鎖定地區（此時 user_location 已經是純淨的 "沙鹿"）
                 filtered_list = [r for r in all_restaurants if r.get("area") == user_location]
                 
-                # 第二層：定義智慧分類代號對應的關鍵字白名單
                 type_keywords = {
                     "宵夜": ["宵夜", "宵夜", "深夜", "燒烤", "串燒", "酒吧", "永和豆漿"],
                     "下午茶": ["下午茶", "點心", "蛋糕", "甜點", "咖啡", "冰品", "豆花", "手搖", "麵包", "烘焙"],
                     "早午餐": ["早午餐", "早餐", "BRUNCH", "蛋餅", "吐司", "漢堡", "飯糰"]
                 }
                 
-                # 如果使用者有指定分類，啟動白名單模糊搜尋機制
                 if user_food_type and user_food_type in type_keywords:
                     keywords = type_keywords[user_food_type]
-                    
                     category_matched_list = []
                     for r in filtered_list:
                         title_upper = r.get("ptt_title", "").upper()
@@ -197,11 +180,10 @@ def webhook():
                             category_matched_list.append(r)
                             
                     filtered_list = category_matched_list
-                    info = f"🤖 這是建宇的美食機器人！已為您連線 Firebase，從小組專專屬大數據庫中精選出符合【{user_location} {user_food_type}】的口袋名單：\n\n"
+                    info = f"🤖 已為您連線 Firebase，從小組專屬大數據庫中精選出符合【{user_location} {user_food_type}】的口袋名單：\n\n"
                 else:
-                    info = f"🤖 這是建宇的美食機器人！已為您從 Firebase 大數據中，隨機精選 5 間【{user_location}】在地好料：\n\n"
+                    info = f"🤖 已為您從 Firebase 大數據中，隨機精選 5 間【{user_location}】在地好料：\n\n"
                 
-                # 抽取最多 5 筆回傳
                 if filtered_list:
                     sample_size = min(5, len(filtered_list))
                     random_list = random.sample(filtered_list, sample_size)
@@ -215,10 +197,13 @@ def webhook():
                     
                     info += result + "祝您用餐愉快！😋"
                 else:
-                    info = f"📋 報告！目前建宇的 Firebase 大數據庫中，暫時還沒有關於【{user_location} {user_food_type}】的精確食記。我會提醒建宇趕快去後台點擊爬蟲更新！"
+                    info = f"📋 報告！目前 Firebase 大數據庫中，暫時還沒有關於【{user_location} {user_food_type}】的精確食記。"
             else:
                 info = "📋 目前資料庫內暫無美食資料，請先前往管理後端進行網頁爬取同步！"
         except Exception as e:
             info = f"❌ 後端執行錯誤，原因: {str(e)}"
             
     return make_response(jsonify({"fulfillmentText": info}))
+
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', port=5000, debug=True)
