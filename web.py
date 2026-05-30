@@ -12,9 +12,6 @@ from firebase_admin import credentials, firestore
 current_dir = os.path.dirname(os.path.abspath(__file__))
 app = Flask(__name__, template_folder=os.path.join(current_dir, "templates"))
 
-# ============================================================
-# 🔑 Firebase 初始化安全鎖
-# ============================================================
 def safe_init_firebase():
     if not firebase_admin._apps:
         try:
@@ -35,6 +32,27 @@ def safe_init_firebase():
             raise e
 
 # ============================================================
+# 🧼 核心優化：強力資料清洗器 (只保留純粹店名)
+# ============================================================
+def clean_restaurant_name(raw_title):
+    # 移除 PTT 常見標籤與地區贅字
+    name = raw_title.replace("[食記]", "").replace("台中", "").replace("沙鹿", "")
+    
+    # 定義要徹底清除的干擾符號清單
+    garbage_symbols = ["-", "—", "[", "]", "【", "】", "(", ")", "（", "）", "～", "~", "：", ":", "/", "\\", "、", "."]
+    for symbol in garbage_symbols:
+        name = name.replace(symbol, "")
+        
+    # 移除常見的開頭贅詞，精準鎖定店名
+    noise_words = ["美食", "下午茶", "景觀餐廳", "夜景很漂亮", "美食推薦", "在地老店", "巷子裡歷史悠久的老店"]
+    for word in noise_words:
+        name = name.replace(word, "")
+        
+    # 徹底清除首尾及內部多餘空格，並限制長度
+    name = name.strip().replace(" ", "")
+    return name[:15]
+
+# ============================================================
 # 🏠 1. 首頁路由
 # ============================================================
 @app.route("/")
@@ -42,7 +60,7 @@ def home():
     return render_template("index.html")
 
 # ============================================================
-# 📡 2. 爬蟲路由：撈出「全部」資料，不設上限
+# 📡 2. 爬蟲路由 (內建雲端資料庫覆蓋、去重、強力清洗)
 # ============================================================
 @app.route("/find_food")
 def find_food():
@@ -61,14 +79,12 @@ def find_food():
         safe_init_firebase()
         db = firestore.client()
         
-        # 執行爬蟲灌入資料
         while url and page_count <= 3:
             response = requests.get(url, headers=headers, cookies=cookies)
             if response.status_code != 200: break
                 
             soup = BeautifulSoup(response.text, 'html.parser')
             articles = soup.find_all('div', class_='r-ent')
-            
             if not articles: break
                 
             for art in articles:
@@ -79,10 +95,11 @@ def find_food():
                     if "公告" in title_text or "[食記]" not in title_text:
                         continue
                     
-                    clean_name = title_text.replace("[食記]", "").replace("台中", "").replace("沙鹿", "").strip()
-                    clean_name = clean_name.replace("/", "").replace("\\", "").replace(".", "")[:20]
+                    # 💡 調用強力清洗器，剔除 [ ] - 等所有髒符號
+                    clean_name = clean_restaurant_name(title_text)
                     
-                    if not clean_name: continue
+                    if not clean_name or len(clean_name) <= 1: 
+                        continue
                         
                     simulated_rating = round(random.uniform(4.0, 4.9), 1)
                     
@@ -96,8 +113,19 @@ def find_food():
                         "sync_time": firestore.SERVER_TIMESTAMP
                     }
                     
-                    db.collection("restaurants").add(doc)
-                    total_inserted += 1
+                    # 💡 關鍵去重邏輯：檢查 Firebase 裡是不是早就存在這家店了
+                    # 用 .where("name", "==", clean_name) 來查詢
+                    existing_docs = db.collection("restaurants").where("name", "==", clean_name).get()
+                    
+                    if len(existing_docs) > 0:
+                        # 找到了！代表資料重覆，我們直接「覆蓋更新」第一筆找到的資料
+                        doc_id = existing_docs[0].id
+                        db.collection("restaurants").document(doc_id).update(doc)
+                        # 更新就不算在「全新新增」的筆數裡
+                    else:
+                        # 沒找到！代表是新店家，直接 add 新增
+                        db.collection("restaurants").add(doc)
+                        total_inserted += 1
             
             time.sleep(0.3)
             page_count += 1
@@ -109,16 +137,11 @@ def find_food():
                     url = "https://www.ptt.cc" + btn['href']
                     break
                     
-        # 💡 修正：拿掉 .limit(100)，直接撈出全部資料！
+        # 撈出不重複的所有美食清單展示
         docs = db.collection("restaurants").order_by("sync_time", direction=firestore.Query.DESCENDING).get()
-        restaurant_list = []
-        for doc in docs:
-            restaurant_list.append(doc.to_dict())
-            
-        # 計算資料庫目前的總筆數
+        restaurant_list = [doc.to_dict() for doc in docs]
         total_in_db = len(restaurant_list)
             
-        # 傳送 total_inserted (本次新增) 與 total_in_db (資料庫總計) 給前端
         return render_template("result.html", total_inserted=total_inserted, total_in_db=total_in_db, restaurants=restaurant_list)
         
     except Exception as e:
