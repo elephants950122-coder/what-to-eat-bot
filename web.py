@@ -7,6 +7,9 @@ from firebase_admin import credentials, firestore
 
 app = Flask(__name__)
 
+# 💡 終極修正：在最外層先宣告全域變數 db，確保整個程式（包括 Webhook）都絕對認得它！
+db = None
+
 # ============================================================
 # 🔑 初始化 Firebase (環境變數安全版)
 # ============================================================
@@ -21,6 +24,8 @@ try:
             cred = credentials.Certificate("serviceAccountKey.json")
             
         firebase_admin.initialize_app(cred)
+    
+    # 💡 確保 db 在這裡被正確指派給全域
     db = firestore.client()
     print("✅ [成功] Firebase 已經連線成功！")
 except Exception as e:
@@ -35,6 +40,8 @@ def home():
 # ============================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
+    global db # 💡 再次明確告訴 Flask，我們要用最外面的那個 db 連線
+    
     req = request.get_json(force=True)
     action = req.get("queryResult", {}).get("action", "")
     
@@ -43,6 +50,10 @@ def webhook():
 
     if action == "recommend_restaurant":
         try:
+            # 檢查 db 是否有成功連線
+            if db is None:
+                return make_response(jsonify({"fulfillmentText": "❌ 後端錯誤：資料庫連線未建立成功。"}))
+
             # 從 Firebase 抓取所有資料
             docs = db.collection("restaurants").get()
             all_restaurants = [doc.to_dict() for doc in docs]
@@ -54,7 +65,6 @@ def webhook():
                 
                 result_text = "🔎 根據資料庫大數據，為您精選沙鹿美食：\n\n"
                 for index, item in enumerate(random_list, 1):
-                    # 💡 安全修正：使用 str() 包裹，防止 Number 型態導致字串拼接崩潰
                     name = str(item.get("name", "未知店家"))
                     rating = str(item.get("rating", "4.0"))
                     title = str(item.get("ptt_title", "無標題"))
@@ -68,11 +78,13 @@ def webhook():
                 info = "📋 目前資料庫內沒資料，請先連線到 /find_food 進行爬取。"
                 
         except Exception as e:
-            # 萬一真的又錯了，把真實的英文錯誤訊息直接噴在 Dialogflow 畫面上，方便我們一槍斃命
             info = f"❌ 後端執行錯誤，原因: {str(e)}"
 
     elif action == "GetFoodList":
         try:
+            if db is None:
+                return make_response(jsonify({"fulfillmentText": "❌ 後端錯誤：資料庫連線未建立成功。"}))
+                
             docs = db.collection("restaurants").get()
             titles = []
             for doc in docs:
