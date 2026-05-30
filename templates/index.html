@@ -8,28 +8,15 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body { background-color: #f8f9fa; font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; padding-top: 56px; }
-        /* 導覽列優化 */
-        .navbar-brand { font-weight: bold; font-size: 1.25rem; transition: color 0.3s; }
+        .navbar-brand { font-weight: bold; font-size: 1.25rem; }
         .hero-section { background: linear-gradient(135deg, #2c3e50, #18bc9c); color: white; padding: 40px 0; border-radius: 0 0 20px 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        /* 標題點擊效果 */
-        .title-link { color: white; text-decoration: none; transition: opacity 0.2s; }
-        .title-link:hover { opacity: 0.9; color: #18bc9c; }
+        .title-link { color: white; text-decoration: none; }
+        .title-link:hover { color: #18bc9c; }
         .card { border: none; border-radius: 15px; box-shadow: 0 6px 18px rgba(0,0,0,0.05); transition: transform 0.2s; }
         .card:hover { transform: translateY(-5px); }
         .status-badge { font-size: 0.9rem; padding: 6px 12px; border-radius: 20px; }
-        .btn-custom { border-radius: 10px; padding: 10px 20px; font-weight: bold; transition: all 0.3s; }
-        
-        /* 💡 網頁對話框浮動視窗樣式 */
-        .chat-bot-container {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            z-index: 1000;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-            border-radius: 12px;
-            overflow: hidden;
-            background: #fff;
-        }
+        .btn-custom { border-radius: 10px; padding: 10px 20px; font-weight: bold; }
+        .chat-bot-container { position: fixed; bottom: 20px; right: 20px; z-index: 1000; box-shadow: 0 10px 30px rgba(0,0,0,0.15); border-radius: 12px; overflow: hidden; background: #fff; }
     </style>
 </head>
 <body>
@@ -67,10 +54,10 @@
                         </p>
                         <hr class="opacity-10">
                         <div class="mt-auto">
-                            <a href="/find_food" target="_blank" class="btn btn-primary btn-custom w-100 shadow-sm">
+                            <a href="/find_food" class="btn btn-primary btn-custom w-100 shadow-sm">
                                 <i class="fas fa-play me-2"></i>立即執行全自動爬蟲同步
                             </a>
-                            <small class="text-muted d-block text-center mt-2">點擊將會開啟新分頁執行 PTT 資料同步</small>
+                            <small class="text-muted d-block text-center mt-2">點擊將會觸發 PTT 資料同步並展示清單</small>
                         </div>
                     </div>
                 </div>
@@ -103,12 +90,7 @@
         </div>
 
         <div class="chat-bot-container d-none d-md-block">
-            <iframe
-                allow="microphone;"
-                width="350"
-                height="430"
-                src="https://console.dialogflow.com/api-client/demo/embedded/what-to-eat-bot">
-            </iframe>
+            <iframe allow="microphone;" width="350" height="430" src="https://console.dialogflow.com/api-client/demo/embedded/what-to-eat-bot"></iframe>
         </div>
 
         <footer class="text-center my-5 text-muted opacity-75">
