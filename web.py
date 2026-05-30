@@ -4,20 +4,24 @@ import random
 import time
 import urllib.parse
 import requests
-from flask import Flask, request, jsonify, make_response
+from flask import Flask, request, jsonify, make_response, render_template
 from bs4 import BeautifulSoup
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-app = Flask(__name__)
+# 💡 關鍵修正一：動態取得當前 web.py 所在的絕對路徑
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# 💡 關鍵修正二：明確指定 template_folder 的絕對路徑，徹底根除 Vercel 的 500 錯誤！
+app = Flask(__name__, template_folder=os.path.join(current_dir, "templates"))
 
 # ============================================================
-# 🔑 1. 初始化 Firebase（100% 配合你 Vercel 後台的 FIREBASE_KEY）
+# 🔑 Firebase 初始化安全鎖 (雲端環境變數專用版)
 # ============================================================
 def safe_init_firebase():
     if not firebase_admin._apps:
         try:
-            # 優先從你截圖中的 Vercel 環境變數讀取
+            # 100% 讀取你 Vercel 後台設定好的 FIREBASE_KEY
             if "FIREBASE_KEY" in os.environ:
                 key_json_str = os.environ["FIREBASE_KEY"].strip()
                 key_dict = json.loads(key_json_str)
@@ -25,9 +29,10 @@ def safe_init_firebase():
                 firebase_admin.initialize_app(cred)
                 print("✅ [雲端連線] 成功透過 FIREBASE_KEY 環境變數建立連線！")
             else:
-                # 本地測試時的備案（如果本地有實體檔案）
-                if os.path.exists("serviceAccountKey.json"):
-                    cred = credentials.Certificate("serviceAccountKey.json")
+                # 本地測試備案 (如果本地有 serviceAccountKey.json)
+                local_key = os.path.join(current_dir, "serviceAccountKey.json")
+                if os.path.exists(local_key):
+                    cred = credentials.Certificate(local_key)
                     firebase_admin.initialize_app(cred)
                     print("✅ [本地連線] 成功透過實體金鑰檔案建立連線！")
                 else:
@@ -37,14 +42,15 @@ def safe_init_firebase():
             raise e
 
 # ============================================================
-# 🏠 首頁路由
+# 🏠 1. 首頁路由：優雅導入外部 HTML 視圖
 # ============================================================
 @app.route("/")
 def home():
+    # Flask 會自動去 templates 資料夾內抓 index.html
     return render_template("index.html")
 
 # ============================================================
-# 📡 路由一：全自動歷史大數據爬蟲
+# 📡 2. 路由一：全自動歷史大數據爬蟲引擎
 # ============================================================
 @app.route("/find_food")
 def find_food():
@@ -110,12 +116,12 @@ def find_food():
                     url = "https://www.ptt.cc" + btn['href']
                     break
                     
-        return f"歷史大數據全自動爬取完畢！成功灌入 {total_inserted} 筆沙鹿美食資料！"
+        return f"✅ 歷史大數據全自動爬取完畢！成功灌入 {total_inserted} 筆沙鹿美食資料！"
     except Exception as e:
         return f"❌ 發生異常：{e}"
 
 # ============================================================
-# 🤖 路由二：Webhook 
+# 🤖 3. 路由二：Webhook 通道 (LINE + Dialogflow 入口)
 # ============================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -125,12 +131,10 @@ def webhook():
     info = "抱歉，我目前無法處理這個動作喔！"
     
     if action == "recommend_restaurant":
-        info = "我是What-to-eat-bot，已為您連線至後端 Firebase，從 PTT Food 板歷史大數據中隨機精選 5 間沙鹿在地好料：\n\n"
+        info = "我是 What-to-eat-bot，為您從資料庫動態篩選精選沙鹿美食：\n\n"
 
         try:
-            # 💡 呼叫安全鎖，強制讓雲端直接讀取環境變數，不需要實體檔案
             safe_init_firebase()
-            
             db = firestore.client()
             collection_ref = db.collection("restaurants")
             docs = collection_ref.get()
@@ -144,10 +148,10 @@ def webhook():
                 random_list = random.sample(all_restaurants, sample_size)
                 
                 result = ""
-                for index, movie_data in enumerate(random_list, 1):
-                    name = str(movie_data.get("name", ""))
-                    rating = str(movie_data.get("rating", "4.0"))
-                    title = str(movie_data.get("ptt_title", ""))
+                for index, item_data in enumerate(random_list, 1):
+                    name = str(item_data.get("name", "未知店家"))
+                    rating = str(item_data.get("rating", "4.0"))
+                    title = str(item_data.get("ptt_title", "無來源標題"))
                     
                     result += f"🍱 推薦 {index}：{name}\n"
                     result += f"⭐ 鄉民評分：{rating}\n"
@@ -155,7 +159,7 @@ def webhook():
                 
                 info += result + "祝您用餐愉快！😋"
             else:
-                info += "📋 目前資料庫內暫無美食資料，請先執行 /find_food 進行網頁爬取同步！"
+                info += "📋 目前資料庫內暫無美食資料，請先前往管理後端進行網頁爬取同步！"
                 
         except Exception as e:
             info = f"❌ 後端執行錯誤，原因: {str(e)}"
@@ -169,9 +173,9 @@ def webhook():
             
             titles = []
             for doc in docs:
-                movie_data = doc.to_dict()
-                if movie_data.get("name"):
-                    titles.append(str(movie_data.get("name")))
+                item_data = doc.to_dict()
+                if item_data.get("name"):
+                    titles.append(str(item_data.get("name")))
                     
             if titles:
                 unique_titles = list(set(titles))
