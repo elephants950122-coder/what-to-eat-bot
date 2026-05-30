@@ -33,22 +33,27 @@ def safe_init_firebase():
             raise e
 
 # ============================================================
-# 🧼 終極符號與贅字終結者：徹底拔除「區」與所有殘留地名贅字
+# 🧼 終極符號與贅字終結者：徹底拔除所有不乾淨的字元
 # ============================================================
 def super_clean_title(raw_title):
-    # 1. 💡 精準手動剔除你發現的各種贅字、FW、促銷字眼與地區名稱（改為正確的 Python 語法）
-    name = raw_title.replace("食記", "") \
-                    .replace("台中市", "") \
-                    .replace("台中", "") \
-                    .replace("沙鹿區", "") \
-                    .replace("沙鹿", "") \
-                    .replace("FW", "") \
-                    .replace("630前買1送1", "")
+    if not raw_title:
+        return ""
+        
+    # 1. 轉成大寫，這樣不論是 fw 還是 FW 都能精準刪除
+    name = raw_title.upper()
     
-    # 2. ✨ 大殺器：這行會自動幫你把「．」、引號、括號、橫槓等所有非中英數的符號全部一槍斃命
-    name = re.sub(r'[^\u4e00-\u9fa5a-zA-Z0-9]', '', name)
+    # 2. 先把明顯的贅字集合全面剔除
+    name = name.replace("[食記]", "").replace("食記", "")\
+               .replace("台中市", "").replace("台中", "")\
+               .replace("沙鹿區", "").replace("沙鹿", "")\
+               .replace("FW:", "").replace("FW", "")\
+               .replace("630前買1送1", "")
     
-    # 3. 終極修剪：如果開頭不幸還是殘留了「區」或「市」等漏網之魚，自動剪掉
+    # 3. 💡 核心大絕招：利用正規表達式，只保留 中文字、英文字母、數字
+    # 所有「．」、句號「。」、逗號「，」、引號、空格通通在這一行直接人間蒸發！
+    name = re.sub(r'[^\u4e00-\u9fa5A-Z0-9]', '', name)
+    
+    # 4. 如果開頭不幸還是殘留了地名贅字，用迴圈強制切除開頭
     front_garbage = ["區", "市", "鎮", "鄉"]
     while len(name) > 0 and name[0] in front_garbage:
         name = name[1:]
@@ -63,35 +68,7 @@ def home():
     return render_template("index.html")
 
 # ============================================================
-# 🛠️ 2. 資料庫一鍵重洗修復路由 (包含修剪「區」字)
-# ============================================================
-@app.route("/repair_db")
-def repair_db():
-    try:
-        safe_init_firebase()
-        db = firestore.client()
-        
-        docs = db.collection("restaurants").get()
-        repaired_count = 0
-        
-        for doc in docs:
-            data = doc.to_dict()
-            raw_title = data.get("ptt_title", "")
-            if raw_title:
-                # 重新呼叫最強清洗器，把「區」字剪乾淨
-                perfect_name = super_clean_title(raw_title)
-                
-                db.collection("restaurants").document(doc.id).update({
-                    "name": perfect_name
-                })
-                repaired_count += 1
-                
-        return f"<h3>🚀 資料庫終極修復成功！</h3><p>共自動清洗並剪除了 <b>{repaired_count}</b> 筆既有資料的開頭贅字與區字！請重新查看結果頁面。</p>"
-    except Exception as e:
-        return f"❌ 修復過程中發生異常：{e}"
-
-# ============================================================
-# 📡 3. 爬蟲路由
+# 📡 2. 爬蟲路由 (全新架構：使用乾淨店名作為唯一 Document ID)
 # ============================================================
 @app.route("/find_food")
 def find_food():
@@ -109,9 +86,6 @@ def find_food():
         safe_init_firebase()
         db = firestore.client()
         
-        existing_docs = db.collection("restaurants").get()
-        existing_titles = {doc.to_dict().get("ptt_title"): doc.id for doc in existing_docs if doc.to_dict().get("ptt_title")}
-        
         response = requests.get(url, headers=headers, cookies=cookies)
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
@@ -125,8 +99,11 @@ def find_food():
                     if "公告" in title_text or "[食記]" not in title_text:
                         continue
                     
+                    # 💡 呼叫終極過濾，此時 display_name 只會剩下純中英數（例如：鮮肉湯包搬家了）
                     display_name = super_clean_title(title_text)
-                    if not display_name: continue
+                    
+                    if not display_name or len(display_name) <= 1: 
+                        continue
                     
                     simulated_rating = round(random.uniform(4.0, 4.9), 1)
                     
@@ -140,13 +117,12 @@ def find_food():
                         "sync_time": firestore.SERVER_TIMESTAMP
                     }
                     
-                    if title_text in existing_titles:
-                        dup_id = existing_titles[title_text]
-                        db.collection("restaurants").document(dup_id).update(doc)
-                    else:
-                        db.collection("restaurants").add(doc)
-                        total_inserted += 1
+                    # 💡 【核心重構】直接用「純淨店名」當作 Document ID
+                    # 如果該店名已存在，.set(doc) 會直接 100% 強制覆蓋舊資料！絕不重複！
+                    db.collection("restaurants").document(display_name).set(doc)
+                    total_inserted += 1
                         
+        # 撈出最乾淨的結果清單
         docs = db.collection("restaurants").order_by("sync_time", direction=firestore.Query.DESCENDING).get()
         restaurant_list = [doc.to_dict() for doc in docs]
         total_in_db = len(restaurant_list)
@@ -157,16 +133,22 @@ def find_food():
         return f"❌ 系統發生異常：{e}"
 
 # ============================================================
-# 🤖 Webhook 通道
+# 🤖 3. Webhook 通道
 # ============================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
     req = request.get_json(force=True)
-    action = req.get("queryResult", {}).get("action", "")
+    query_result = req.get("queryResult", {})
+    action = query_result.get("action", "")
+    
+    # 💡 關鍵：同時撈取 location（地點）與 food_type（分類，可能是宵夜、下午茶或空值）
+    parameters = query_result.get("parameters", {})
+    user_location = parameters.get("location", "沙鹿")
+    user_food_type = parameters.get("food_type", "") # 如果使用者沒講，這就是空字串
+    
     info = "抱歉，我目前無法處理這個動作喔！"
     
     if action == "recommend_restaurant":
-        info = "我是 What-to-eat-bot，為您從資料庫動態篩選精選沙鹿美食：\n\n"
         try:
             safe_init_firebase()
             db = firestore.client()
@@ -174,21 +156,35 @@ def webhook():
             all_restaurants = [doc.to_dict() for doc in docs]
             
             if all_restaurants:
-                sample_size = min(5, len(all_restaurants))
-                random_list = random.sample(all_restaurants, sample_size)
-                result = ""
-                for index, item_data in enumerate(random_list, 1):
-                    name = str(item_data.get("name", "未知店家"))
-                    rating = str(item_data.get("rating", "4.0"))
-                    title = str(item_data.get("ptt_title", "無來源標題"))
-                    result += f"🍱 推薦 {index}：{name}\n⭐ 鄉民評分：{rating}\n🔗 來源文章：{title}\n\n"
-                info += result + "祝您用餐愉快！😋"
+                # 💡 智慧篩選機制：
+                # 1. 優先篩選地點（例如：沙鹿）
+                filtered_list = [r for r in all_restaurants if r.get("area") == user_location]
+                
+                # 2. 如果使用者有指定分類（例如：宵夜），我們就去 PTT 原始標題裡比對有沒有包含「宵夜」兩個字！
+                if user_food_type:
+                    filtered_list = [r for r in filtered_list if user_food_type in r.get("ptt_title", "")]
+                    info = f"🤖 這是建宇的美食機器人！已為您從 Firebase 大數據中，精選出符合【{user_location}】且屬於【{user_food_type}】的在地好料：\n\n"
+                else:
+                    info = f"🤖 這是建宇的美食機器人！已為您從 Firebase 大數據中，隨機精選 5 間【{user_location}】在地好料：\n\n"
+                
+                # 如果篩選完後還有資料，就隨機抽 5 筆
+                if filtered_list:
+                    sample_size = min(5, len(filtered_list))
+                    random_list = random.sample(filtered_list, sample_size)
+                    
+                    result = ""
+                    for index, item_data in enumerate(random_list, 1):
+                        name = str(item_data.get("name", "未知店家"))
+                        rating = str(item_data.get("rating", "4.0"))
+                        title = str(item_data.get("ptt_title", "無來源標題"))
+                        result += f"🍱 推薦 {index}：{name}\n⭐ 鄉民評分：{rating}\n🔗 來源文章：{title}\n\n"
+                    
+                    info += result + "祝您用餐愉快！😋"
+                else:
+                    info = f"📋 抱歉，目前大數據庫中暫時沒有關於【{user_location} {user_food_type}】的相關食記資料，建議您先去管理後台擴大爬取範圍喔！"
             else:
-                info += "📋 目前資料庫內暫無美食資料，請先前往管理後端進行網頁爬取同步！"
+                info = "📋 目前資料庫內暫無美食資料，請先前往管理後端進行網頁爬取同步！"
         except Exception as e:
             info = f"❌ 後端執行錯誤，原因: {str(e)}"
             
     return make_response(jsonify({"fulfillmentText": info}))
-
-if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000, debug=True)
