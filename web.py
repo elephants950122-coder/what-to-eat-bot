@@ -13,9 +13,6 @@ from firebase_admin import credentials, firestore
 current_dir = os.path.dirname(os.path.abspath(__file__))
 app = Flask(__name__, template_folder=os.path.join(current_dir, "templates"))
 
-# 💡 啟用 Flask 內建快閃訊息功能必須設定的金鑰
-app.secret_key = "providence_im_secret_key"
-
 def safe_init_firebase():
     if not firebase_admin._apps:
         try:
@@ -156,25 +153,24 @@ def find_food():
         return f"❌ 爬蟲中斷（可能因數據過大超時），目前已同步：{total_inserted} 筆。原因：{e}"
 
 # ============================================================
-# 🗑️ 4. 資料庫優化管理：一鍵清空資料庫 (利用 Flash 回傳首頁)
+# 🗑️ 4. 資料庫優化管理：一鍵清空資料庫 (防污染重置功能)
 # ============================================================
 @app.route("/delete_all")
 def delete_all():
     try:
         safe_init_firebase()
         db = firestore.client()
+        
+        # 批次撈出所有 document 並拔除
         docs = db.collection("restaurants").list_documents()
         count = 0
         for doc in docs:
             doc.delete()
             count += 1
             
-        # 💡 核心機制：透過 flash 將成功訊息塞入 Session，並重新導向首頁
-        flash(f"報告管理員！已成功連線 Firebase 雲端資料庫並清空共 {count} 筆歷史垃圾快取！數據已重置為全新狀態。", "success")
-        return redirect(url_for('home'))
+        return f"<h3>🧹 資料庫重置成功！</h3><p>已從 Firebase 雲端資料庫中完全移除共 {count} 筆美食快取。現在您可以返回首頁重新發動深度爬蟲！</p><br><a href='/'>➔ 返回管理首頁</a>"
     except Exception as e:
-        flash(f"❌ 系統清空資料庫失敗，錯誤原因: {e}", "danger")
-        return redirect(url_for('home'))
+        return f"❌ 清空失敗，原因: {e}"
 
 # ============================================================
 # 🤖 5. Webhook 通道 (LINE 機器人核心對接組件)

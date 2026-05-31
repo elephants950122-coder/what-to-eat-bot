@@ -14,6 +14,7 @@
         .title-link:hover { color: #18bc9c; }
         .card { border: none; border-radius: 15px; box-shadow: 0 6px 18px rgba(0,0,0,0.05); transition: transform 0.2s; }
         .card:hover { transform: translateY(-5px); }
+        .status-badge { font-size: 0.9rem; padding: 6px 12px; border-radius: 20px; }
         .btn-custom { border-radius: 10px; padding: 12px 20px; font-weight: bold; font-size: 1.05rem; transition: all 0.3s; }
         .qrcode-box { background-color: #fdfdfd; border: 1px dashed #2ecc71; border-radius: 12px; padding: 20px; }
     </style>
@@ -29,29 +30,14 @@
         </div>
     </nav>
 
-    <div class="hero-section text-center mb-4">
+    <div class="hero-section text-center mb-5">
         <div class="container">
             <h1 class="display-5 fw-bold mb-2">
                 <a href="/" class="title-link"><i class="fas fa-database me-3"></i>沙鹿美食大數據管理系統</a>
             </h1>
             <p class="lead opacity-75">靜宜大學 資管系期末專案成果展示</p>
+            <span class="badge bg-success status-badge shadow-sm"><i class="fas fa-check-circle me-1"></i> 雲端伺服器 正常運行中</span>
         </div>
-    </div>
-
-    <div class="container mb-4" style="position: relative; z-index: 1000;">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-          {% if messages %}
-            {% for category, message in messages %}
-              <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show shadow border-0" role="alert" style="border-radius: 12px;">
-                <div class="d-flex align-items-center">
-                    <i class="fas fa-check-circle me-3 fs-4 text-success"></i>
-                    <div class="fw-bold text-dark">{{ message }}</div>
-                </div>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-              </div>
-            {% endfor %}
-          {% endif %}
-        {% endwith %}
     </div>
 
     <div class="container">
@@ -64,7 +50,7 @@
                             <i class="fas fa-spider text-primary me-2"></i>PTT 爬蟲引擎
                         </h3>
                         <p class="card-text text-muted flex-grow-1">
-                            智慧抓取 PTT Food 版歷史食記，自動執行模糊比對去重演算法存入雲端。
+                            自動前往 PTT Food 板搜刮所有關於「沙鹿」的歷史食記。經過後端系統清洗、篩選店名並模擬評分後，全自動灌入 Firebase 雲端資料庫。
                         </p>
                         <hr class="opacity-10">
                         <div class="mt-auto">
@@ -72,7 +58,7 @@
                                 <i class="fas fa-play me-2"></i>執行全自動爬蟲同步
                             </a>
                             <div class="text-center mt-3">
-                                <a href="/delete_all" class="text-danger small fw-bold" onclick="return confirm('⚠️ 警告！這將會完全清空 Firebase 資料庫中所有的沙鹿美食數據，確定要執行重置嗎？')">
+                                <a href="/delete_all" class="text-danger small fw-bold" onclick="return confirm('⚠️ 警告！這將會完全清空 Firebase 資料庫中所有的沙鹿美食快取數據，確定要執行重置嗎？')">
                                     <i class="fas fa-trash-alt me-1"></i>重置資料庫並清空垃圾資料
                                 </a>
                             </div>
