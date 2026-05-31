@@ -131,8 +131,7 @@ def find_food():
                 
             page_count += 1
             
-            # 💡 為了防範 Vercel 免費版 10 秒超時的硬性限制，每頁列表僅深度連線前 12 篇進行內文解析
-            target_articles = articles[:12]
+            target_articles = articles
             
             for art in target_articles:
                 title_tag = art.find('div', class_='title')
@@ -197,7 +196,7 @@ def find_food():
             time.sleep(0.4)
             
             # 💡 防禦機制：因為點入內文耗時長，若已經處理超過 24 筆（約兩頁列表），則強行收尾，確保 Vercel 安全降落不報 504
-            if total_inserted >= 24:
+            if total_inserted >= 60:
                 break
                         
         docs = db.collection("restaurants").order_by("sync_time", direction=firestore.Query.DESCENDING).get()
