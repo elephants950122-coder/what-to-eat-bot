@@ -39,6 +39,7 @@ def safe_init_firebase():
                     firebase_admin.initialize_app(cred)
                 else:
                     raise FileNotFoundError("找不到任何 Firebase 金鑰設定（環境變數或本地 JSON 檔）")
+                    
             print("✅ [Firebase 連線] 成功建立通道！")
         except Exception as e:
             print(f"❌ [Firebase 連線失敗]：{e}")
@@ -58,6 +59,7 @@ def super_clean_title(raw_title):
         "[食記]", "食記", "台中市", "台中", "沙鹿區", "沙鹿", "FW:", "FW", "推薦", 
         "必吃", "好吃", "超強", "終於吃到", "隱藏版", "排隊", "平價", "美味", "老店", "大推"
     ]
+    
     for garbage in garbage_list:
         name = name.replace(garbage, "")
     
@@ -76,7 +78,10 @@ def super_clean_title(raw_title):
 # ============================================================
 def extract_info_from_content(content):
     results = {"name": None, "address": None}
-    if not content: return results
+    
+    if not content:
+        return results
+        
     lines = content.split('\n')
     for line in lines:
         # 1. 擷取正式店名
@@ -84,7 +89,9 @@ def extract_info_from_content(content):
             parts = re.split(r'[:：]', line)
             if len(parts) > 1:
                 clean_n = re.sub(r'[^\u4e00-\u9fa5A-Z0-9]', '', parts[1]).strip()
-                if clean_n: results["name"] = clean_n[:20]
+                if clean_n:
+                    results["name"] = clean_n[:20]
+                    
         # 2. 擷取地址
         if any(k in line for k in ["地址", "住址", "地 址", "地點", "位址"]):
             parts = re.split(r'[:：]', line)
@@ -97,7 +104,8 @@ def extract_info_from_content(content):
     # 備用 Regex 匹配
     if not results["address"]:
         addr_match = re.search(r'台?中[市縣]沙鹿區[^\s\d]+[路街巷][\d之-]+號?', content)
-        if addr_match: results["address"] = addr_match.group()
+        if addr_match:
+            results["address"] = addr_match.group()
         
     return results
 
@@ -136,6 +144,7 @@ def find_food():
         # 💡 [進度記憶系統] 讀取上次爬到第幾頁
         config_ref = db.collection("metadata").document("crawler_config")
         config_doc = config_ref.get()
+        
         last_page = 0
         if config_doc.exists:
             last_page = config_doc.to_dict().get("last_page_crawled", 0)
@@ -256,6 +265,7 @@ def delete_all():
         safe_init_firebase()
         db = firestore.client()
         docs = db.collection("restaurants").get()
+        
         count = 0
         for doc in docs:
             db.collection("restaurants").document(doc.id).delete()
@@ -266,17 +276,14 @@ def delete_all():
             
         flash(f"報告管理員！已成功連線 Firebase 雲端資料庫並清空共 {count} 筆歷史垃圾快取！數據與爬蟲進度皆已重置。", "success")
         
-        # 💡 修改點在此：刪除後直接停留在 result.html，並將數據筆數設為 0
         return render_template("result.html", total_inserted=0, total_in_db=0, restaurants=[])
         
     except Exception as e:
         flash(f"❌ 系統清空資料庫失敗，錯誤原因: {e}", "danger")
-        
-        # 💡 失敗時也停留在 result.html
         return render_template("result.html", total_inserted=0, total_in_db=0, restaurants=[])
 
 # ============================================================
-# 🤖 5. Webhook 通道 (完整保留推薦、分類與清單功能)
+# 🤖 5. Webhook 通道 (加入超強防呆與地圖導航功能)
 # ============================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -285,19 +292,59 @@ def webhook():
     action = query_result.get("action", "")
     parameters = query_result.get("parameters", {})
     
+    # 💡 取得使用者完整輸入句子 (用來做超強備用分析)
+    query_text = query_result.get("queryText", "")
+    
     # 安全拆解 Dialogflow 丟過來的地理物件字典
-    raw_location = parameters.get("location", "沙鹿")
+    raw_location = parameters.get("location", "")
+    user_location = ""
+    
     if isinstance(raw_location, dict):
-        loc_str = raw_location.get("subadmin-area") or raw_location.get("city") or raw_location.get("admin-area") or "沙鹿"
+        loc_str = raw_location.get("subadmin-area") or raw_location.get("city") or raw_location.get("admin-area") or ""
         user_location = loc_str.replace("區", "").replace("市", "").strip()
     else:
         user_location = str(raw_location).replace("區", "").replace("市", "").strip()
         
+    # 💡 [防呆 1]：如果 Dialogflow 沒抓到地點，我們自己掃描句子有沒有別的縣市！
     if not user_location:
-        user_location = "沙鹿"
+        out_of_bounds = ["台北", "桃園", "新竹", "苗栗", "彰化", "南投", "雲林", "嘉義", "台南", "高雄", "屏東", "宜蘭", "花蓮", "台東"]
+        for city in out_of_bounds:
+            if city in query_text:
+                user_location = city
+                break
+                
+        # 真的都沒指定，才預設是沙鹿
+        if not user_location:
+            user_location = "沙鹿"
 
+    # 💡 [防呆 2]：嚴格阻擋非沙鹿的要求
+    if "沙鹿" not in user_location:
+        info = f"🥺 抱歉！我是靜宜資管專屬的「沙鹿美食機器人」，我的雲端資料庫只有收錄沙鹿的美食，暫時沒有【{user_location}】的資料喔！你可以試著問我沙鹿的咖哩或宵夜！"
+        return make_response(jsonify({"fulfillmentText": info}))
+
+    # 解析食物種類
     user_food_type = parameters.get("food_type", "") 
-    info = "抱歉，我目前無法處理這個動作喔！"
+    
+    # 💡 分類關鍵字大擴充！
+    type_keywords = {
+        "宵夜": ["宵夜", "深夜", "燒烤", "串燒", "酒吧", "永和豆漿"],
+        "下午茶": ["下午茶", "點心", "蛋糕", "甜點", "咖啡", "冰品", "豆花", "手搖", "麵包", "烘焙"],
+        "早午餐": ["早午餐", "早餐", "BRUNCH", "蛋餅", "吐司", "漢堡", "飯糰"],
+        "咖哩": ["咖哩", "咖喱", "curry"],
+        "火鍋": ["火鍋", "鍋物", "麻辣鍋", "臭臭鍋", "小火鍋", "壽喜燒"],
+        "日式": ["日式", "拉麵", "壽司", "丼飯", "生魚片", "居酒屋"]
+    }
+    
+    # 💡 [防呆 3]：如果 Dialogflow 聽不懂「咖哩」，我們直接掃描原句
+    if not user_food_type:
+        for food_category, keywords in type_keywords.items():
+            if food_category in query_text or any(kw in query_text for kw in keywords):
+                user_food_type = food_category
+                # 就算 Dialogflow 走到 Fallback，我們偵測到關鍵字，就強行改成推薦動作
+                action = "recommend_restaurant"
+                break
+
+    info = "抱歉，我目前無法處理這個動作喔！請試著告訴我「想吃沙鹿的宵夜」或「推薦沙鹿的咖哩」。"
     
     if action == "recommend_restaurant":
         try:
@@ -308,14 +355,7 @@ def webhook():
             
             if all_restaurants:
                 # 第一層篩選：符合地點
-                filtered_list = [r for r in all_restaurants if r.get("area") == user_location]
-                
-                # 第二層篩選：分類對照
-                type_keywords = {
-                    "宵夜": ["宵夜", "宵夜", "深夜", "燒烤", "串燒", "酒吧", "永和豆漿"],
-                    "下午茶": ["下午茶", "點心", "蛋糕", "甜點", "咖啡", "冰品", "豆花", "手搖", "麵包", "烘焙"],
-                    "早午餐": ["早午餐", "早餐", "BRUNCH", "蛋餅", "吐司", "漢堡", "飯糰"]
-                }
+                filtered_list = [r for r in all_restaurants if r.get("area") == "沙鹿"]
                 
                 if user_food_type and user_food_type in type_keywords:
                     keywords = type_keywords[user_food_type]
@@ -326,9 +366,9 @@ def webhook():
                             category_matched_list.append(r)
                             
                     filtered_list = category_matched_list
-                    info = f"🤖 已為您連線 Firebase，從小組專屬大數據庫中精選出符合【{user_location} {user_food_type}】的口袋名單：\n\n"
+                    info = f"🤖 已為您連線 Firebase，從小組專屬大數據庫中精選出符合【沙鹿 {user_food_type}】的口袋名單：\n\n"
                 else:
-                    info = f"🤖 已為您從 Firebase 大數據中，隨機精選 5 間【{user_location}】在地好料：\n\n"
+                    info = f"🤖 已為您從 Firebase 大數據中，隨機精選 5 間【沙鹿】在地好料：\n\n"
                 
                 if filtered_list:
                     sample_size = min(5, len(filtered_list))
@@ -340,19 +380,15 @@ def webhook():
                         rating = str(item_data.get("rating", "4.0"))
                         address = str(item_data.get("address", "暫無明確地址快取"))
                         
-                        # 💡 核彈級亮點：動態生成 Google Maps 一鍵導航連結
-                        # 如果有地址就用地址導航，沒有就用「地區 + 店名」去 Google 地圖搜
-                        search_query = address if address != "暫無明確地址快取" else f"{user_location} {name}"
-                        maps_link = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(search_query)}"
+                        # 💡 核心亮點：自動合成 Google 導航網址
+                        map_query = address if "沙鹿" in address else f"台中市沙鹿區{address}"
+                        map_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(map_query)}"
                         
-                        result += f"🍱 推薦 {index}：{name}\n"
-                        result += f"📍 店家地址：{address}\n"
-                        result += f"⭐ 鄉民評分：{rating}\n"
-                        result += f"🗺️ 地圖導航：{maps_link}\n\n"
+                        result += f"🍱 推薦 {index}：{name}\n📍 地址：{address}\n⭐ 評分：{rating}\n🗺️ 導航：{map_url}\n\n"
                     
                     info += result + "祝您用餐愉快！😋"
                 else:
-                    info = f"📋 報告！目前 Firebase 大數據庫中，暫時還沒有關於【{user_location} {user_food_type}】的精確食記。"
+                    info = f"📋 報告！目前 Firebase 大數據庫中，暫時還沒有關於【沙鹿 {user_food_type}】的精確食記。"
             else:
                 info = "📋 目前資料庫內暫無美食資料，請先前往管理後端進行網頁爬取同步！"
         except Exception as e:
@@ -365,22 +401,15 @@ def webhook():
             db = firestore.client()
             docs = db.collection("restaurants").get()
             
-            # 💡 一併優化清單顯示：讓清單也能同時秀出店名與地址
-            food_items = []
+            titles = []
             for doc in docs:
                 item_data = doc.to_dict()
-                name = item_data.get("name")
-                address = item_data.get("address", "無地址資訊")
-                if name:
-                    # 把地址縮短一點放在括號裡，保持版面整齊
-                    short_addr = address[:12] + "..." if len(address) > 12 else address
-                    food_items.append(f"{name} ({short_addr})")
+                if item_data.get("name"):
+                    titles.append(str(item_data.get("name")))
                     
-            if food_items:
-                unique_items = list(set(food_items))
-                info = "📋 目前大數據庫收錄的在地美食有：\n\n🍔 " + "\n🍔 ".join(unique_items[:30])
-                if len(unique_items) > 30:
-                    info += "\n\n...以及更多隱藏美食，請直接對我輸入分類來隨機抽選喔！"
+            if titles:
+                unique_titles = list(set(titles))
+                info = "📋 目前資料庫收錄的沙鹿美食有：\n\n-- " + "\n-- ".join(unique_titles[:30])
             else:
                 info = "📋 目前資料庫內暫無美食資料。"
         except Exception as e:
