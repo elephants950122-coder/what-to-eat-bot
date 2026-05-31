@@ -283,7 +283,7 @@ def delete_all():
         return render_template("result.html", total_inserted=0, total_in_db=0, restaurants=[])
 
 # ============================================================
-# 🤖 5. Webhook 通道 (加入超強防呆與地圖導航功能)
+# 🤖 5. Webhook 通道 (加入國外防呆與地圖導航功能)
 # ============================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -292,10 +292,12 @@ def webhook():
     action = query_result.get("action", "")
     parameters = query_result.get("parameters", {})
     
-    # 💡 取得使用者完整輸入句子 (用來做超強備用分析)
+    # 💡 取得使用者完整輸入句子
     query_text = query_result.get("queryText", "")
     
-    # 安全拆解 Dialogflow 丟過來的地理物件字典
+    # 💡 [進階防呆 1]：先過濾掉「食物國籍詞彙」，避免誤擋 (例如: 想吃"日本料理"不該被當成要去"日本")
+    clean_query = query_text.replace("日本料理", "").replace("日式", "").replace("韓式", "").replace("韓國烤肉", "").replace("泰式", "").replace("義式", "").replace("美式", "").replace("港式", "")
+    
     raw_location = parameters.get("location", "")
     if isinstance(raw_location, dict):
         loc_str = raw_location.get("subadmin-area") or raw_location.get("city") or raw_location.get("admin-area") or ""
@@ -303,39 +305,49 @@ def webhook():
     else:
         user_location = str(raw_location).replace("區", "").replace("市", "").strip()
         
-    # 💡 [防呆終極版]：白名單機制 (Whitelist) - 只允許沙鹿/靜宜/台中，其餘有明確地點的一律阻擋
-    valid_keywords = ["沙鹿", "靜宜", "台中"]
+    # 💡 [進階防呆 2]：Dialogflow 沒抓到地點時，我們親自掃描有沒有提到國內外其他城市！
+    if not user_location:
+        out_of_bounds = [
+            "台北", "新北", "基隆", "桃園", "新竹", "苗栗", "彰化", "南投", "雲林", "嘉義", 
+            "台南", "高雄", "屏東", "宜蘭", "花蓮", "台東", "清水", "梧棲", "大甲", "大肚", "龍井",
+            "日本", "韓國", "泰國", "美國", "英國", "法國", "義大利", "中國", "大陸", "香港", "澳門", "東京", "大阪", "首爾", "外國", "國外"
+        ]
+        for place in out_of_bounds:
+            if place in clean_query:
+                user_location = place
+                break
+                
+    # 💡 [白名單審查]：只允許沙鹿、靜宜、弘光、台中
+    valid_keywords = ["沙鹿", "靜宜", "弘光", "台中"]
 
-    # 1. 檢查 Dialogflow 抓出的地點，或者原句中是否包含白名單關鍵字
-    if any(kw in user_location for kw in valid_keywords) or any(kw in query_text for kw in valid_keywords):
+    if any(kw in user_location for kw in valid_keywords) or any(kw in clean_query for kw in valid_keywords):
         user_location = "沙鹿"  # 判定為有效，統一鎖定為沙鹿去撈資料庫
     else:
-        # 2. 如果沒有白名單關鍵字，但 Dialogflow 確實有抓到一個「其他地點」（例如桃園、日本）
         if user_location:
+            # 確定有提到其他國家/城市，無情擋下！
             info = f"🥺 抱歉！我是靜宜資管專屬的「沙鹿美食機器人」，我的雲端資料庫只有收錄沙鹿的美食，暫時沒有【{user_location}】的資料喔！你可以試著問我沙鹿的美食！"
             return make_response(jsonify({"fulfillmentText": info}))
         else:
-            # 3. 如果 Dialogflow 沒抓到地點，句子裡也沒有任何地點（例如只說「肚子餓了」、「推薦宵夜」）
-            user_location = "沙鹿"  # 預設放行當作問沙鹿
+            # 什麼地點都沒提（例如「推薦宵夜」），安全放行
+            user_location = "沙鹿"
 
     user_food_type = parameters.get("food_type", "") 
     
-    # 💡 分類關鍵字大擴充字典 (這段剛剛不小心被切斷了，現在完美補回)
+    # 💡 分類關鍵字大擴充字典
     type_keywords = {
         "宵夜": ["宵夜", "深夜", "燒烤", "串燒", "酒吧", "永和豆漿"],
         "下午茶": ["下午茶", "點心", "蛋糕", "甜點", "咖啡", "冰品", "豆花", "手搖", "麵包", "烘焙"],
         "早午餐": ["早午餐", "早餐", "BRUNCH", "蛋餅", "吐司", "漢堡", "飯糰"],
         "咖哩": ["咖哩", "咖喱", "curry"],
         "火鍋": ["火鍋", "鍋物", "麻辣鍋", "臭臭鍋", "小火鍋", "壽喜燒"],
-        "日式": ["日式", "拉麵", "壽司", "丼飯", "生魚片", "居酒屋"]
+        "日式": ["日式", "拉麵", "壽司", "丼飯", "生魚片", "居酒屋", "日本料理"]
     }
     
-    # 💡 [防呆 3]：如果 Dialogflow 聽不懂「咖哩」，我們直接掃描原句
+    # 💡 如果 Dialogflow 聽不懂食物名稱，我們直接掃描原句
     if not user_food_type:
         for food_category, keywords in type_keywords.items():
             if food_category in query_text or any(kw in query_text for kw in keywords):
                 user_food_type = food_category
-                # 就算 Dialogflow 走到 Fallback，我們偵測到關鍵字，就強行改成推薦動作
                 action = "recommend_restaurant"
                 break
 
@@ -375,7 +387,7 @@ def webhook():
                         rating = str(item_data.get("rating", "4.0"))
                         address = str(item_data.get("address", "暫無明確地址快取"))
                         
-                        # 💡 核心亮點：自動合成 Google 導航網址
+                        # 💡 自動合成 Google 導航網址
                         map_query = address if "沙鹿" in address else f"台中市沙鹿區{address}"
                         map_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(map_query)}"
                         
@@ -389,7 +401,7 @@ def webhook():
         except Exception as e:
             info = f"❌ 後端執行錯誤，原因: {str(e)}"
 
-    # 顯示完整資料庫清單的動作 (GetFoodList)
+    # 顯示完整資料庫清單的動作
     elif action == "GetFoodList":
         try:
             safe_init_firebase()
