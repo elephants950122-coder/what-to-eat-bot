@@ -13,6 +13,9 @@ from firebase_admin import credentials, firestore
 current_dir = os.path.dirname(os.path.abspath(__file__))
 app = Flask(__name__, template_folder=os.path.join(current_dir, "templates"))
 
+# 💡 啟用 Flask 內建快閃訊息功能必須設定的金鑰
+app.secret_key = "providence_im_secret_key"
+
 def safe_init_firebase():
     if not firebase_admin._apps:
         try:
@@ -33,34 +36,30 @@ def safe_init_firebase():
             raise e
 
 # ============================================================
-# 🧼 強力清洗演算法：移除形容詞與贅字，只留下「品牌核心」
+# 🧼 終極符號與贅字終結者 (資料清洗演算法)
 # ============================================================
 def super_clean_title(raw_title):
     if not raw_title:
         return ""
         
     name = raw_title.upper()
+    name = name.replace("[食記]", "").replace("食記", "")\
+               .replace("台中市", "").replace("台中", "")\
+               .replace("沙鹿區", "").replace("沙鹿", "")\
+               .replace("FW:", "").replace("FW", "")\
+               .replace("630前買1送1", "")
     
-    # 1. 移除 PTT 標籤與地區贅字
-    garbage_list = [
-        "[食記]", "食記", "台中市", "台中", "沙鹿區", "沙鹿", "FW:", "FW", "推薦", 
-        "必吃", "好吃", "超強", "終於吃到", "隱藏版", "排隊", "平價", "美味", "老店", "大推"
-    ]
-    for garbage in garbage_list:
-        name = name.replace(garbage, "")
-    
-    # 2. 只保留 中文字、英文字母、數字
+    # 強力過濾：只保留 中文字、英文字母、數字
     name = re.sub(r'[^\u4e00-\u9fa5A-Z0-9]', '', name)
     
-    # 3. 移除頭部的行政區殘留
     front_garbage = ["區", "市", "鎮", "鄉"]
     while len(name) > 0 and name[0] in front_garbage:
         name = name[1:]
         
-    return name.strip()
+    return name.strip()[:20]
 
 # ============================================================
-# 🏠 1. 首頁路由
+# 🏠 1. 首頁管理後台路由
 # ============================================================
 @app.route("/")
 def home():
@@ -74,85 +73,90 @@ def chat_page():
     return render_template("webdamo.html")
 
 # ============================================================
-# 📡 3. 智慧去重爬蟲：包含關係比對法 (Fuzzy Deduplication)
+# 📡 3. 深度無限翻頁爬蟲 (利用店名當 Doc ID 機制做到天生去重)
 # ============================================================
 @app.route("/find_food")
 def find_food():
     location = "沙鹿"
     encoded_location = urllib.parse.quote(location)
+    
+    # 初始搜尋網址
     url = f"https://www.ptt.cc/bbs/Food/search?q={encoded_location}"
     cookies = {'over18': '1'}
-    headers = {"User-Agent": "Mozilla/5.0"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
     
     total_inserted = 0
+    page_count = 0
+    
     try:
         safe_init_firebase()
         db = firestore.client()
-
-        # 💡 核心技術：先撈出資料庫現有的所有店名，用來做「包含比對」
-        existing_docs = db.collection("restaurants").get()
-        existing_names = [doc.id for doc in existing_docs] # 抓取所有的 Document ID
-
+        
+        # 💡 只要有上頁按鈕就永無止境爬下去
         while url:
             response = requests.get(url, headers=headers, cookies=cookies)
-            if response.status_code != 200: break
+            if response.status_code != 200:
+                break
+                
             soup = BeautifulSoup(response.text, 'html.parser')
             articles = soup.find_all('div', class_='r-ent')
-            if not articles: break
-
+            
+            if not articles:
+                break
+                
+            page_count += 1
+            
             for art in articles:
                 title_tag = art.find('div', class_='title')
                 if title_tag and title_tag.a:
                     title_text = title_tag.a.text.strip()
-                    if "[食記]" not in title_text: continue
                     
-                    new_name = super_clean_title(title_text)
-                    if not new_name or len(new_name) <= 1: continue
-
-                    # 💡 智慧去重：檢查新店名是否與現有店名「互相包含」
-                    # 比如「炳修豆漿」與「炳修永和豆漿」會被視為同一家
-                    matched_id = new_name
-                    for ex_name in existing_names:
-                        if ex_name in new_name or new_name in ex_name:
-                            # 如果有包含關係，統一使用較短的那個（通常是品牌主名）
-                            matched_id = ex_name if len(ex_name) < len(new_name) else new_name
-                            break
+                    if "公告" in title_text or "[食記]" not in title_text:
+                        continue
                     
+                    clean_name = super_clean_title(title_text)
+                    if not clean_name:
+                        continue
+                        
                     simulated_rating = round(random.uniform(4.0, 4.9), 1)
+                    
                     doc = {
-                        "name": matched_id,
+                        "name": clean_name,
                         "ptt_title": title_text,
                         "area": location,
                         "rating": simulated_rating,
                         "type": "美食",
+                        "source": "PTT Food板全自動歷史大數據",
                         "sync_time": firestore.SERVER_TIMESTAMP
                     }
-
-                    # 使用 matched_id 進行寫入，若重複則會自動覆蓋，不會產生新資料
-                    db.collection("restaurants").document(matched_id).set(doc)
                     
-                    # 如果是新名字，加入快取清單避免同一輪爬蟲內重複
-                    if matched_id not in existing_names:
-                        existing_names.append(matched_id)
-                        total_inserted += 1
+                    # 💡 用 clean_name 當 Document ID，多點幾次也絕對不會產生重複的垃圾資料！
+                    db.collection("restaurants").document(clean_name).set(doc)
+                    total_inserted += 1
             
-            # 翻頁邏輯
+            # 💡 翻頁演算法：自動從 HTML 提取 PTT 的「‹ 上頁」按鈕
             btn_tags = soup.find_all('a', class_='btn wide')
-            url = None
+            url = None 
             for btn in btn_tags:
                 if "上頁" in btn.text and 'href' in btn.attrs:
                     url = "https://www.ptt.cc" + btn['href']
                     break
+            
             time.sleep(0.3)
-            # 限制最多翻 5 頁避免 Vercel 超時
-            if total_inserted > 100: break
-
-        return render_template("result.html", total_inserted=total_inserted, total_in_db=len(existing_names))
+                        
+        docs = db.collection("restaurants").order_by("sync_time", direction=firestore.Query.DESCENDING).get()
+        restaurant_list = [doc.to_dict() for doc in docs]
+        total_in_db = len(restaurant_list)
+            
+        return render_template("result.html", total_inserted=total_inserted, total_in_db=total_in_db, restaurants=restaurant_list)
+        
     except Exception as e:
-        return f"❌ 異常：{e}"
+        return f"❌ 爬蟲中斷（可能因數據過大超時），目前已同步：{total_inserted} 筆。原因：{e}"
 
 # ============================================================
-# 🗑️ 4. 清空資料庫
+# 🗑️ 4. 資料庫優化管理：一鍵清空資料庫 (利用 Flash 回傳首頁)
 # ============================================================
 @app.route("/delete_all")
 def delete_all():
@@ -164,59 +168,86 @@ def delete_all():
         for doc in docs:
             doc.delete()
             count += 1
-        return f"<h3>🧹 重置成功</h3><p>已清空 {count} 筆資料。</p><a href='/'>返回</a>"
-    except Exception as e: return f"失敗: {e}"
+            
+        # 💡 核心機制：透過 flash 將成功訊息塞入 Session，並重新導向首頁
+        flash(f"報告管理員！已成功連線 Firebase 雲端資料庫並清空共 {count} 筆歷史垃圾快取！數據已重置為全新狀態。", "success")
+        return redirect(url_for('home'))
+    except Exception as e:
+        flash(f"❌ 系統清空資料庫失敗，錯誤原因: {e}", "danger")
+        return redirect(url_for('home'))
 
 # ============================================================
-# 🤖 5. Webhook (地理物件解析 + 智慧分類)
+# 🤖 5. Webhook 通道 (LINE 機器人核心對接組件)
 # ============================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
     req = request.get_json(force=True)
-    params = req.get("queryResult", {}).get("parameters", {})
-    action = req.get("queryResult", {}).get("action", "")
+    query_result = req.get("queryResult", {})
+    action = query_result.get("action", "")
+    parameters = query_result.get("parameters", {})
     
-    # 地理物件解析
-    raw_loc = params.get("location", "沙鹿")
-    if isinstance(raw_loc, dict):
-        user_loc = (raw_loc.get("subadmin-area") or raw_loc.get("city") or "沙鹿").replace("區","").replace("市","")
+    raw_location = parameters.get("location", "沙鹿")
+    if isinstance(raw_location, dict):
+        loc_str = raw_location.get("subadmin-area") or raw_location.get("city") or raw_location.get("admin-area") or "沙鹿"
+        user_location = loc_str.replace("區", "").replace("市", "").strip()
     else:
-        user_loc = str(raw_loc).replace("區","").replace("市","")
+        user_location = str(raw_location).replace("區", "").replace("市", "").strip()
+        
+    if not user_location:
+        user_location = "沙鹿"
 
-    user_food_type = params.get("food_type", "")
-    info = "抱歉，目前無法處理。"
-
+    user_food_type = parameters.get("food_type", "") 
+    info = "抱歉，我目前無法處理這個動作喔！"
+    
     if action == "recommend_restaurant":
         try:
             safe_init_firebase()
             db = firestore.client()
             docs = db.collection("restaurants").get()
-            all_r = [d.to_dict() for d in docs]
+            all_restaurants = [doc.to_dict() for doc in docs]
             
-            # 過濾地區
-            filtered = [r for r in all_r if r.get("area") == user_loc]
-            
-            # 關鍵字智慧聯想
-            type_map = {
-                "宵夜": ["宵夜", "深夜", "燒烤", "豆漿"],
-                "下午茶": ["甜點", "咖啡", "蛋糕", "冰"],
-                "早午餐": ["早餐", "蛋餅", "漢堡", "飯糰"]
-            }
-            
-            if user_food_type in type_map:
-                keywords = type_map[user_food_type]
-                filtered = [r for r in filtered if any(kw in r.get("ptt_title", "") for kw in keywords)]
-
-            if filtered:
-                res = random.sample(filtered, min(3, len(filtered)))
-                info = f"🤖 為您精選【{user_loc} {user_food_type}】：\n\n"
-                for i, r in enumerate(res, 1):
-                    info += f"🍱 {i}. {r['name']}\n⭐ 評分：{r['rating']}\n\n"
+            if all_restaurants:
+                filtered_list = [r for r in all_restaurants if r.get("area") == user_location]
+                
+                type_keywords = {
+                    "宵夜": ["宵夜", "宵夜", "深夜", "燒烤", "串燒", "酒吧", "永和豆漿"],
+                    "下午茶": ["下午茶", "點心", "蛋糕", "甜點", "咖啡", "冰品", "豆花", "手搖", "麵包", "烘焙"],
+                    "早午餐": ["早午餐", "早餐", "BRUNCH", "蛋餅", "吐司", "漢堡", "飯糰"]
+                }
+                
+                if user_food_type and user_food_type in type_keywords:
+                    keywords = type_keywords[user_food_type]
+                    category_matched_list = []
+                    for r in filtered_list:
+                        title_upper = r.get("ptt_title", "").upper()
+                        if any(kw in title_upper for kw in keywords):
+                            category_matched_list.append(r)
+                            
+                    filtered_list = category_matched_list
+                    info = f"🤖 已為您連線 Firebase，從小組專屬大數據庫中精選出符合【{user_location} {user_food_type}】的口袋名單：\n\n"
+                else:
+                    info = f"🤖 已為您從 Firebase 大數據中，隨機精選 5 間【{user_location}】在地好料：\n\n"
+                
+                if filtered_list:
+                    sample_size = min(5, len(filtered_list))
+                    random_list = random.sample(filtered_list, sample_size)
+                    
+                    result = ""
+                    for index, item_data in enumerate(random_list, 1):
+                        name = str(item_data.get("name", "未知店家"))
+                        rating = str(item_data.get("rating", "4.0"))
+                        title = str(item_data.get("ptt_title", "無來源標題"))
+                        result += f"🍱 推薦 {index}：{name}\n⭐ 鄉民評分：{rating}\n🔗 來源文章：{title}\n\n"
+                    
+                    info += result + "祝您用餐愉快！😋"
+                else:
+                    info = f"📋 報告！目前 Firebase 大數據庫中，暫時還沒有關於【{user_location} {user_food_type}】的精確食記。"
             else:
-                info = f"📋 找不到【{user_loc} {user_food_type}】的資料。"
-        except Exception as e: info = f"出錯: {e}"
+                info = "📋 目前資料庫內暫無美食資料，請先前往管理後端進行網頁爬取同步！"
+        except Exception as e:
+            info = f"❌ 後端執行錯誤，原因: {str(e)}"
             
     return make_response(jsonify({"fulfillmentText": info}))
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=True)
