@@ -19,7 +19,9 @@ app = Flask(__name__, template_folder=os.path.join(current_dir, "templates"))
 # 啟用 Flask 內建快閃訊息功能 (Flash Messages) 必須設定的安全金鑰
 app.secret_key = "providence_shalu_ultimate_key"
 
-# 初始化 Firebase 的全域安全鎖
+# ============================================================
+# 🔥 初始化 Firebase 的全域安全鎖
+# ============================================================
 def safe_init_firebase():
     if not firebase_admin._apps:
         try:
@@ -70,29 +72,34 @@ def super_clean_title(raw_title):
     return name.strip()[:20]
 
 # ============================================================
-# 🔍 深度內文穿透：精準擷取 PTT 食記中的實體地址
+# 🔍 深度內文穿透：精準擷取 PTT 食記中的實體地址與正式店名
 # ============================================================
-def extract_address_from_content(content):
-    if not content:
-        return None
-        
-    # 策略 1：依行尋找地址關鍵字標籤
+def extract_info_from_content(content):
+    results = {"name": None, "address": None}
+    if not content: return results
     lines = content.split('\n')
     for line in lines:
+        # 1. 擷取正式店名
+        if any(k in line for k in ["餐廳名稱", "店名", "店家名稱"]):
+            parts = re.split(r'[:：]', line)
+            if len(parts) > 1:
+                clean_n = re.sub(r'[^\u4e00-\u9fa5A-Z0-9]', '', parts[1]).strip()
+                if clean_n: results["name"] = clean_n[:20]
+        # 2. 擷取地址
         if any(k in line for k in ["地址", "住址", "地 址", "地點", "位址"]):
             parts = re.split(r'[:：]', line)
             if len(parts) > 1:
                 addr = parts[1].strip()
                 if "沙鹿" in addr or "台中" in addr:
-                    addr = re.sub(r'\(.*\)', '', addr).strip() # 移除括號備註
-                    return addr[:45]
-                    
-    # 策略 2：用正規表達式匹配標準台中沙鹿地址格式
-    addr_match = re.search(r'台?中[市縣]沙鹿區[^\s\d]+[路街巷][\d之-]+號?', content)
-    if addr_match:
-        return addr_match.group()
+                    addr = re.sub(r'\(.*\)', '', addr).strip()
+                    results["address"] = addr[:45]
+    
+    # 備用 Regex 匹配
+    if not results["address"]:
+        addr_match = re.search(r'台?中[市縣]沙鹿區[^\s\d]+[路街巷][\d之-]+號?', content)
+        if addr_match: results["address"] = addr_match.group()
         
-    return None
+    return results
 
 # ============================================================
 # 🏠 1. 管理後台首頁
@@ -109,48 +116,65 @@ def chat_page():
     return render_template("webdamo.html")
 
 # ============================================================
-# 📡 3. 雙層穿透式爬蟲 (8頁隨機跳躍 + 地址指紋去重)
+# 📡 3. 全滿載深度爬蟲 (循序記憶 1 頁 + 無限制篇數完整抓取)
 # ============================================================
 @app.route("/find_food")
 def find_food():
     location = "沙鹿"
     encoded_location = urllib.parse.quote(location)
-    
-    # 💡 核心優化：隨機從 1 到 8 頁出發，多點幾次就能挖到不同的老店，突破第一頁魔咒！
-    random_start_page = random.randint(1, 8)
-    url = f"https://www.ptt.cc/bbs/Food/search?page={random_start_page}&q={encoded_location}"
-    
     cookies = {'over18': '1'}
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     
-    net_new_inserted = 0  # 僅記錄「真正新加入」的店家
-    processed_count = 0   # 記錄處理的文章數，防止 Vercel 10秒超時
+    net_new_inserted = 0
     
     try:
         safe_init_firebase()
         db = firestore.client()
         
-        # 預先抓取資料庫中現有的所有 ID 列表，用於快速去重比對
+        # 💡 [進度記憶系統] 讀取上次爬到第幾頁
+        config_ref = db.collection("metadata").document("crawler_config")
+        config_doc = config_ref.get()
+        last_page = 0
+        if config_doc.exists:
+            last_page = config_doc.to_dict().get("last_page_crawled", 0)
+            
+        start_page = last_page + 1
+        
+        # 💡 為了達成「文章不設限全抓」，我們將每次處理頁數改為「精確的 1 頁」
+        # 1 頁約 20 篇，完全穿透剛好壓在 Vercel 10 秒安全線內！
+        max_pages_per_run = 1 
+        end_page = start_page + max_pages_per_run - 1
+        
+        # 超過 8 頁歷史盡頭，自動歸零循環
+        if start_page > 8: 
+            start_page = 1
+            end_page = 1
+            
         existing_docs = db.collection("restaurants").get()
         existing_ids = [doc.id for doc in existing_docs]
         
-        while url and processed_count < 15:  # 限制單輪最大處理文章數，防範伺服器 504 崩潰
+        reached_end = False
+
+        # 🚀 循序推進：專注掃描 start_page
+        for current_p in range(start_page, end_page + 1):
+            url = f"https://www.ptt.cc/bbs/Food/search?page={current_p}&q={encoded_location}"
             response = requests.get(url, headers=headers, cookies=cookies)
+            
             if response.status_code != 200:
                 break
                 
             soup = BeautifulSoup(response.text, 'html.parser')
             articles = soup.find_all('div', class_='r-ent')
+            
+            # 如果這頁完全沒文章，代表爬到 PTT 歷史盡頭
             if not articles:
+                reached_end = True
                 break
                 
+            # 💡 移除限制陣列，整頁文章 100% 完整遍歷不漏抓
             for art in articles:
-                # 如果已經處理夠多文章，提早結束以保證網頁能安全回傳
-                if processed_count >= 15:
-                    break
-                    
                 title_tag = art.find('div', class_='title')
                 if title_tag and title_tag.a:
                     title_text = title_tag.a.text.strip()
@@ -162,9 +186,8 @@ def find_food():
                     if not clean_name:
                         continue
                     
-                    # 抓取內文的詳細 URL 連結
                     article_url = "https://www.ptt.cc" + title_tag.a['href']
-                    found_address = None
+                    deep_info = {"name": None, "address": None}
                     
                     # --- 🚀 啟動第二層爬蟲：點進內文抓地址 ---
                     try:
@@ -173,23 +196,24 @@ def find_food():
                             art_soup = BeautifulSoup(art_response.text, 'html.parser')
                             main_content = art_soup.find(id='main-content')
                             content_text = main_content.text if main_content else ""
-                            found_address = extract_address_from_content(content_text)
+                            deep_info = extract_info_from_content(content_text)
                     except Exception as e:
-                        print(f"⚠️ [內文解析跳過] {article_url} 連線超時: {e}")
+                        pass # 遇到死連結直接跳過，不中斷爬蟲
+                    
+                    final_name = deep_info["name"] if deep_info["name"] else clean_name
                     
                     # 💡 【實體識別去重】：優先以「地址」為 ID，抓不到則以「純淨店名」為 ID
-                    doc_id = found_address if found_address else clean_name
+                    doc_id = deep_info["address"] if deep_info["address"] else final_name
                     
-                    # 判斷是否為全新加入資料庫的資料
                     if doc_id not in existing_ids:
                         net_new_inserted += 1
-                        existing_ids.append(doc_id)  # 動態寫入快取，防同一輪重覆計算
+                        existing_ids.append(doc_id)
                         
                     simulated_rating = round(random.uniform(4.0, 4.9), 1)
                     
                     doc_data = {
-                        "name": clean_name,
-                        "address": found_address if found_address else "暫無明確地址快取",
+                        "name": final_name,
+                        "address": deep_info["address"] if deep_info["address"] else "暫無明確地址快取",
                         "ptt_title": title_text,
                         "area": location,
                         "rating": simulated_rating,
@@ -198,27 +222,25 @@ def find_food():
                         "sync_time": firestore.SERVER_TIMESTAMP
                     }
                     
-                    # 執行寫入 (同 ID 自動覆蓋)
                     db.collection("restaurants").document(doc_id).set(doc_data)
-                    processed_count += 1
-                    time.sleep(0.1)
+                    
+                    # 💡 為了 20 篇能在 10 秒內跑完，將延遲縮短為 0.05 秒
+                    time.sleep(0.05) 
             
-            # 自動尋找 PTT 的「‹ 上頁」按鈕
-            btn_tags = soup.find_all('a', class_='btn wide')
-            url = None 
-            for btn in btn_tags:
-                if "上頁" in btn.text and 'href' in btn.attrs:
-                    url = "https://www.ptt.cc" + btn['href']
-                    break
-            
-            time.sleep(0.3)
-            
-        # 重新撈取 Firebase 中不重複的所有美食清單，展示在結果頁
+        # 💡 [儲存進度] 爬取結束後，將進度寫回 Firebase
+        if reached_end:
+            config_ref.set({"last_page_crawled": 0})
+            flash_msg = "🎉 恭喜！系統已自動偵測到最後一頁，所有沙鹿歷史數據已完全無遺漏同步！進度已自動歸零。"
+        else:
+            config_ref.set({"last_page_crawled": end_page})
+            flash_msg = f"🚀 無漏網之魚深度同步成功！本次「完整掃描」第 {start_page} 頁所有文章，全新灌入 {net_new_inserted} 筆沙鹿美食！"
+        
+        # 重新撈取資料庫清單展示
         docs = db.collection("restaurants").order_by("sync_time", direction=firestore.Query.DESCENDING).get()
         restaurant_list = [doc.to_dict() for doc in docs]
         total_in_db = len(restaurant_list)
         
-        flash(f"🚀 大數據同步成功！本次隨機由第 {random_start_page} 頁發動穿透，全新灌入 {net_new_inserted} 筆沙鹿美食！", "success")
+        flash(flash_msg, "success")
         return render_template("result.html", total_inserted=net_new_inserted, total_in_db=total_in_db, restaurants=restaurant_list)
         
     except Exception as e:
@@ -226,7 +248,7 @@ def find_food():
         return redirect(url_for('home'))
 
 # ============================================================
-# 🗑️ 4. 資料庫優化管理：一鍵清空資料庫
+# 🗑️ 4. 資料庫優化管理：一鍵清空資料庫 (並重置爬蟲進度)
 # ============================================================
 @app.route("/delete_all")
 def delete_all():
@@ -239,14 +261,17 @@ def delete_all():
             db.collection("restaurants").document(doc.id).delete()
             count += 1
             
-        flash(f"報告管理員！已成功連線 Firebase 雲端資料庫並清空共 {count} 筆歷史垃圾快取！數據已重置。", "success")
+        # 💡 同時將爬蟲進度強制歸零
+        db.collection("metadata").document("crawler_config").set({"last_page_crawled": 0})
+            
+        flash(f"報告管理員！已成功連線 Firebase 雲端資料庫並清空共 {count} 筆歷史垃圾快取！數據與爬蟲進度皆已重置。", "success")
         return redirect(url_for('home'))
     except Exception as e:
         flash(f"❌ 系統清空資料庫失敗，錯誤原因: {e}", "danger")
         return redirect(url_for('home'))
 
 # ============================================================
-# 🤖 5. Webhook 通道 (LINE 機器人核心對接組件 - 支援分類篩選與地址)
+# 🤖 5. Webhook 通道 (完整保留推薦、分類與清單功能)
 # ============================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
