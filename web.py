@@ -351,7 +351,7 @@ def webhook():
                 action = "recommend_restaurant"
                 break
 
-    info = "抱歉，我目前無法處理這個動作喔！請試著告訴我「想吃沙鹿的宵夜」或「推薦沙鹿的咖哩」。"
+    info = "抱歉，我目前無法處理這個動作喔！請試著告訴我「想吃沙鹿的美食」。"
     
     if action == "recommend_restaurant":
         try:
