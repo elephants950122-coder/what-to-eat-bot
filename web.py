@@ -56,6 +56,33 @@ def super_clean_title(raw_title):
     return name.strip()[:20]
 
 # ============================================================
+# 🔍 核心黑科技：進入 PTT 內文深度提取「店家地址」
+# ============================================================
+def extract_address_from_content(content):
+    if not content: 
+        return None
+        
+    # 策略 1：依行尋找地址常見關鍵字標籤
+    lines = content.split('\n')
+    for line in lines:
+        if any(k in line for k in ["地址", "住址", "地 址", "地點", "位址"]):
+            # 用冒號切開文字
+            parts = re.split(r'[:：]', line)
+            if len(parts) > 1:
+                addr = parts[1].strip()
+                if "沙鹿" in addr or "台中" in addr:
+                    # 洗掉地址後面的括號備註廢話
+                    addr = re.sub(r'\(.*\)', '', addr).strip()
+                    return addr[:40]
+                    
+    # 策略 2：如果發文者沒寫標籤，直接用正規表達式撈取標準台灣地址格式
+    addr_match = re.search(r'台?中[市縣]沙鹿區[^\s\d]+[路街巷][\d之-]+號?', content)
+    if addr_match:
+        return addr_match.group()
+        
+    return None
+
+# ============================================================
 # 🏠 1. 首頁管理後台路由
 # ============================================================
 @app.route("/")
@@ -70,7 +97,7 @@ def chat_page():
     return render_template("webdamo.html")
 
 # ============================================================
-# 📡 3. 深度無限翻頁爬蟲 (利用店名當 Doc ID 機制做到天生去重)
+# 📡 3. 雙層穿透式爬蟲 (利用「地址為主鍵」做到終極去重演算法)
 # ============================================================
 @app.route("/find_food")
 def find_food():
@@ -91,7 +118,6 @@ def find_food():
         safe_init_firebase()
         db = firestore.client()
         
-        # 💡 只要有上頁按鈕就永無止境爬下去
         while url:
             response = requests.get(url, headers=headers, cookies=cookies)
             if response.status_code != 200:
@@ -105,7 +131,10 @@ def find_food():
                 
             page_count += 1
             
-            for art in articles:
+            # 💡 為了防範 Vercel 免費版 10 秒超時的硬性限制，每頁列表僅深度連線前 12 篇進行內文解析
+            target_articles = articles[:12]
+            
+            for art in target_articles:
                 title_tag = art.find('div', class_='title')
                 if title_tag and title_tag.a:
                     title_text = title_tag.a.text.strip()
@@ -116,11 +145,34 @@ def find_food():
                     clean_name = super_clean_title(title_text)
                     if not clean_name:
                         continue
-                        
+                    
+                    # 抓取內文的詳細 URL 連結
+                    article_url = "https://www.ptt.cc" + title_tag.a['href']
+                    found_address = None
+                    
+                    # --- 🚀 啟動第二層爬蟲：直接潛入內文抓取地址 ---
+                    try:
+                        art_response = requests.get(article_url, headers=headers, cookies=cookies)
+                        if art_response.status_code == 200:
+                            art_soup = BeautifulSoup(art_response.text, 'html.parser')
+                            main_content = art_soup.find(id='main-content')
+                            content_text = main_content.text if main_content else ""
+                            
+                            # 呼叫地址提取器
+                            found_address = extract_address_from_content(content_text)
+                    except Exception as e:
+                        print(f"⚠️ [內文解析跳過] 連結點擊失敗: {article_url}, 原因: {e}")
+                    
                     simulated_rating = round(random.uniform(4.0, 4.9), 1)
+                    
+                    # 💡 【實體識別核心去重機制】：
+                    # 如果抓得到地址，就用地址作為 Document ID；若抓不到，則維持原本的店名作為 ID。
+                    # 這能讓不同作者、不同標題，但「相同實體地址」的店家在寫入時自動合併覆蓋，阻絕垃圾重複資料！
+                    doc_id = found_address if found_address else clean_name
                     
                     doc = {
                         "name": clean_name,
+                        "address": found_address if found_address else "暫無明確地址快取",
                         "ptt_title": title_text,
                         "area": location,
                         "rating": simulated_rating,
@@ -129,8 +181,8 @@ def find_food():
                         "sync_time": firestore.SERVER_TIMESTAMP
                     }
                     
-                    # 💡 用 clean_name 當 Document ID，多點幾次也絕對不會產生重複的垃圾資料！
-                    db.collection("restaurants").document(clean_name).set(doc)
+                    # 將確定的 doc_id 寫入 Firebase
+                    db.collection("restaurants").document(doc_id).set(doc)
                     total_inserted += 1
             
             # 💡 翻頁演算法：自動從 HTML 提取 PTT 的「‹ 上頁」按鈕
@@ -141,7 +193,12 @@ def find_food():
                     url = "https://www.ptt.cc" + btn['href']
                     break
             
-            time.sleep(0.3)
+            # 資管友善爬蟲規範：進入下一頁前歇息 0.4 秒，降低伺服器負載
+            time.sleep(0.4)
+            
+            # 💡 防禦機制：因為點入內文耗時長，若已經處理超過 24 筆（約兩頁列表），則強行收尾，確保 Vercel 安全降落不報 504
+            if total_inserted >= 24:
+                break
                         
         docs = db.collection("restaurants").order_by("sync_time", direction=firestore.Query.DESCENDING).get()
         restaurant_list = [doc.to_dict() for doc in docs]
@@ -173,7 +230,7 @@ def delete_all():
         return f"❌ 清空失敗，原因: {e}"
 
 # ============================================================
-# 🤖 5. Webhook 通道 (LINE 機器人核心對接組件)
+# 🤖 5. Webhook 通道 (LINE 機器人核心對接組件 - 升級地址回傳)
 # ============================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -232,8 +289,11 @@ def webhook():
                     for index, item_data in enumerate(random_list, 1):
                         name = str(item_data.get("name", "未知店家"))
                         rating = str(item_data.get("rating", "4.0"))
-                        title = str(item_data.get("ptt_title", "無來源標題"))
-                        result += f"🍱 推薦 {index}：{name}\n⭐ 鄉民評分：{rating}\n🔗 來源文章：{title}\n\n"
+                        
+                        # 💡 亮點優化：將新爬到的地址欄位，正式呈現在 LINE 機器人的回覆訊息中
+                        address = str(item_data.get("address", "暫無明確地址快取"))
+                        
+                        result += f"🍱 推薦 {index}：{name}\n📍 店家地址：{address}\n⭐ 鄉民評分：{rating}\n\n"
                     
                     info += result + "祝您用餐愉快！😋"
                 else:
