@@ -340,7 +340,15 @@ def webhook():
                         rating = str(item_data.get("rating", "4.0"))
                         address = str(item_data.get("address", "暫無明確地址快取"))
                         
-                        result += f"🍱 推薦 {index}：{name}\n📍 店家地址：{address}\n⭐ 鄉民評分：{rating}\n\n"
+                        # 💡 核彈級亮點：動態生成 Google Maps 一鍵導航連結
+                        # 如果有地址就用地址導航，沒有就用「地區 + 店名」去 Google 地圖搜
+                        search_query = address if address != "暫無明確地址快取" else f"{user_location} {name}"
+                        maps_link = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(search_query)}"
+                        
+                        result += f"🍱 推薦 {index}：{name}\n"
+                        result += f"📍 店家地址：{address}\n"
+                        result += f"⭐ 鄉民評分：{rating}\n"
+                        result += f"🗺️ 地圖導航：{maps_link}\n\n"
                     
                     info += result + "祝您用餐愉快！😋"
                 else:
@@ -357,15 +365,22 @@ def webhook():
             db = firestore.client()
             docs = db.collection("restaurants").get()
             
-            titles = []
+            # 💡 一併優化清單顯示：讓清單也能同時秀出店名與地址
+            food_items = []
             for doc in docs:
                 item_data = doc.to_dict()
-                if item_data.get("name"):
-                    titles.append(str(item_data.get("name")))
+                name = item_data.get("name")
+                address = item_data.get("address", "無地址資訊")
+                if name:
+                    # 把地址縮短一點放在括號裡，保持版面整齊
+                    short_addr = address[:12] + "..." if len(address) > 12 else address
+                    food_items.append(f"{name} ({short_addr})")
                     
-            if titles:
-                unique_titles = list(set(titles))
-                info = "📋 目前資料庫收錄的沙鹿美食有：\n\n-- " + "\n-- ".join(unique_titles[:30])
+            if food_items:
+                unique_items = list(set(food_items))
+                info = "📋 目前大數據庫收錄的在地美食有：\n\n🍔 " + "\n🍔 ".join(unique_items[:30])
+                if len(unique_items) > 30:
+                    info += "\n\n...以及更多隱藏美食，請直接對我輸入分類來隨機抽選喔！"
             else:
                 info = "📋 目前資料庫內暫無美食資料。"
         except Exception as e:
