@@ -297,40 +297,29 @@ def webhook():
     
     # 安全拆解 Dialogflow 丟過來的地理物件字典
     raw_location = parameters.get("location", "")
-    user_location = ""
-    
     if isinstance(raw_location, dict):
         loc_str = raw_location.get("subadmin-area") or raw_location.get("city") or raw_location.get("admin-area") or ""
         user_location = loc_str.replace("區", "").replace("市", "").strip()
     else:
         user_location = str(raw_location).replace("區", "").replace("市", "").strip()
         
-    # 💡 [防呆 1]：如果 Dialogflow 沒抓到地點，我們自己掃描句子有沒有別的縣市！
-    if not user_location:
-        out_of_bounds = ["台北", "桃園", "新竹", "苗栗", "彰化", "南投", "雲林", "嘉義", "台南", "高雄", "屏東", "宜蘭", "花蓮", "台東"]
-        for city in out_of_bounds:
-            if city in query_text:
-                user_location = city
-                break
-                
-        # 真的都沒指定，才預設是沙鹿
-        if not user_location:
-            user_location = "沙鹿"
+    # 💡 [防呆終極版]：白名單機制 (Whitelist) - 只允許沙鹿/靜宜，其餘有明確地點的一律阻擋
+    valid_keywords = ["沙鹿", "靜宜", "台中"]
 
-    # 💡 [防呆 2]：嚴格阻擋非沙鹿的要求
-    if "沙鹿" not in user_location:
-        info = f"🥺 抱歉！我是靜宜資管專屬的「沙鹿美食機器人」，我的雲端資料庫只有收錄沙鹿的美食，暫時沒有【{user_location}】的資料喔！你可以試著問我沙鹿的咖哩或宵夜！"
-        return make_response(jsonify({"fulfillmentText": info}))
+    # 1. 檢查 Dialogflow 抓出的地點，或者原句中是否包含白名單關鍵字
+    if any(kw in user_location for kw in valid_keywords) or any(kw in query_text for kw in valid_keywords):
+        user_location = "沙鹿"  # 判定為有效，統一鎖定為沙鹿去撈資料庫
+    else:
+        # 2. 如果沒有白名單關鍵字，但 Dialogflow 確實有抓到一個「其他地點」（例如桃園、日本）
+        if user_location:
+            info = f"🥺 抱歉！我是靜宜資管專屬的「沙鹿美食機器人」，我的雲端資料庫只有收錄沙鹿的美食，暫時沒有【{user_location}】的資料喔！你可以試著問我沙鹿的美食！"
+            return make_response(jsonify({"fulfillmentText": info}))
+        else:
+            # 3. 如果 Dialogflow 沒抓到地點，句子裡也沒有任何地點（例如只說「肚子餓了」、「推薦宵夜」）
+            user_location = "沙鹿"  # 預設放行當作問沙鹿
 
-    # 解析食物種類
     user_food_type = parameters.get("food_type", "") 
-    
-    # 💡 分類關鍵字大擴充！
-    type_keywords = {
-        "宵夜": ["宵夜", "深夜", "燒烤", "串燒", "酒吧", "永和豆漿"],
-        "下午茶": ["下午茶", "點心", "蛋糕", "甜點", "咖啡", "冰品", "豆花", "手搖", "麵包", "烘焙"],
-        "早午餐": ["早午餐", "早餐", "BRUNCH", "蛋餅", "吐司", "漢堡", "飯糰"],
-        "咖哩": ["咖哩", "咖喱", "curry"],
+    info = "抱歉，我目前無法處理這個動作喔！"
         "火鍋": ["火鍋", "鍋物", "麻辣鍋", "臭臭鍋", "小火鍋", "壽喜燒"],
         "日式": ["日式", "拉麵", "壽司", "丼飯", "生魚片", "居酒屋"]
     }
