@@ -265,10 +265,15 @@ def delete_all():
         db.collection("metadata").document("crawler_config").set({"last_page_crawled": 0})
             
         flash(f"報告管理員！已成功連線 Firebase 雲端資料庫並清空共 {count} 筆歷史垃圾快取！數據與爬蟲進度皆已重置。", "success")
-        return redirect(url_for('home'))
+        
+        # 💡 修改點在此：刪除後直接停留在 result.html，並將數據筆數設為 0
+        return render_template("result.html", total_inserted=0, total_in_db=0, restaurants=[])
+        
     except Exception as e:
         flash(f"❌ 系統清空資料庫失敗，錯誤原因: {e}", "danger")
-        return redirect(url_for('home'))
+        
+        # 💡 失敗時也停留在 result.html
+        return render_template("result.html", total_inserted=0, total_in_db=0, restaurants=[])
 
 # ============================================================
 # 🤖 5. Webhook 通道 (完整保留推薦、分類與清單功能)
