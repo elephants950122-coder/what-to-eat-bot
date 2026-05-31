@@ -57,7 +57,11 @@
                             <a href="/find_food" class="btn btn-primary btn-custom w-100 shadow-sm">
                                 <i class="fas fa-play me-2"></i>執行全自動爬蟲同步
                             </a>
-                            <small class="text-muted d-block text-center mt-2">點擊觸發資料庫數據同步</small>
+                            <div class="text-center mt-3">
+                                <a href="/delete_all" class="text-danger small fw-bold" onclick="return confirm('⚠️ 警告！這將會完全清空 Firebase 資料庫中所有的沙鹿美食快取數據，確定要執行重置嗎？')">
+                                    <i class="fas fa-trash-alt me-1"></i>重置資料庫並清空垃圾資料
+                                </a>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -95,7 +99,7 @@
                         
                         <div class="qrcode-box text-center mb-3">
                             <div class="fs-5 text-secondary fw-bold mb-2"><i class="fas fa-search-plus me-1"></i>機器人專屬帳號</div>
-                            <div class="bg-light text-dark border p-3 font-monospace fs-5 fw-bold rounded shadow-sm mb-1" id="lineIdText">@021aeycz</div>
+                            <div class="bg-light text-dark border p-3 font-monospace fs-5 fw-bold rounded shadow-sm mb-1" id="lineIdText">@您的機器人ID</div>
                             <div class="small fw-bold text-muted mt-2"><i class="fas fa-info-circle me-1"></i>點擊下方按鈕將自動複製 ID</div>
                         </div>
 
@@ -128,7 +132,6 @@
     <script>
         document.getElementById("webhookUrl").value = window.location.origin + "/webhook";
 
-        // Webhook 地址複製腳本
         function copyWebhook() {
             var copyText = document.getElementById("webhookUrl");
             copyText.select();
@@ -141,18 +144,17 @@
             }, 2000);
         }
 
-        // 💡 新增：LINE ID 一鍵複製與狀態倒數切換腳本
         function copyLineId() {
             var idText = document.getElementById("lineIdText").innerText;
             navigator.clipboard.writeText(idText);
             
             var btn = document.getElementById("lineCopyBtn");
-            btn.className = "btn btn-dark btn-custom w-100 shadow-sm"; // 變更顏色提示使用者
+            btn.className = "btn btn-dark btn-custom w-100 shadow-sm"; 
             btn.innerHTML = "<i class='fas fa-check-circle me-2'></i>📋 複製 ID 成功！";
             
             setTimeout(function(){
                 btn.className = "btn btn-success btn-custom w-100 shadow-sm";
-                btn.innerHTML = "<i class='fas fa-copy me-2'></i>點擊複製機器人 ID";
+                btn.innerHTML = "<i class='fas fa-copy'></i>點擊複製機器人 ID";
             }, 2000);
         }
     </script>

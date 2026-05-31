@@ -3,7 +3,7 @@ import json
 import random
 import time
 import urllib.parse
-import re  # 正規表達式大殺器
+import re
 import requests
 from flask import Flask, request, jsonify, make_response, render_template
 from bs4 import BeautifulSoup
@@ -33,7 +33,7 @@ def safe_init_firebase():
             raise e
 
 # ============================================================
-# 🧼 終極符號與贅字終結者：徹底拔除所有不乾淨的字元
+# 🧼 終極符號與贅字終結者 (資料清洗演算法)
 # ============================================================
 def super_clean_title(raw_title):
     if not raw_title:
@@ -46,14 +46,14 @@ def super_clean_title(raw_title):
                .replace("FW:", "").replace("FW", "")\
                .replace("630前買1送1", "")
     
-    # 只保留 中文字、英文字母、數字
+    # 強力過濾：只保留 中文字、英文字母、數字
     name = re.sub(r'[^\u4e00-\u9fa5A-Z0-9]', '', name)
     
     front_garbage = ["區", "市", "鎮", "鄉"]
     while len(name) > 0 and name[0] in front_garbage:
         name = name[1:]
         
-    return name.strip()
+    return name.strip()[:20]
 
 # ============================================================
 # 🏠 1. 首頁管理後台路由
@@ -63,19 +63,21 @@ def home():
     return render_template("index.html")
 
 # ============================================================
-# 🤖 2. 網頁免登入對話測試端點 (連向你的獨立 webdemo 頁面)
+# 🤖 2. 網頁免登入對話測試端點
 # ============================================================
-@app.route("/webdamo")
+@app.route("/chat")
 def chat_page():
     return render_template("webdamo.html")
 
 # ============================================================
-# 📡 3. 爬蟲同步路由
+# 📡 3. 深度無限翻頁爬蟲 (利用店名當 Doc ID 機制做到天生去重)
 # ============================================================
 @app.route("/find_food")
 def find_food():
     location = "沙鹿"
     encoded_location = urllib.parse.quote(location)
+    
+    # 初始搜尋網址
     url = f"https://www.ptt.cc/bbs/Food/search?q={encoded_location}"
     cookies = {'over18': '1'}
     headers = {
@@ -83,15 +85,25 @@ def find_food():
     }
     
     total_inserted = 0
+    page_count = 0
     
     try:
         safe_init_firebase()
         db = firestore.client()
         
-        response = requests.get(url, headers=headers, cookies=cookies)
-        if response.status_code == 200:
+        # 💡 只要有上頁按鈕就永無止境爬下去
+        while url:
+            response = requests.get(url, headers=headers, cookies=cookies)
+            if response.status_code != 200:
+                break
+                
             soup = BeautifulSoup(response.text, 'html.parser')
             articles = soup.find_all('div', class_='r-ent')
+            
+            if not articles:
+                break
+                
+            page_count += 1
             
             for art in articles:
                 title_tag = art.find('div', class_='title')
@@ -101,25 +113,35 @@ def find_food():
                     if "公告" in title_text or "[食記]" not in title_text:
                         continue
                     
-                    display_name = super_clean_title(title_text)
-                    if not display_name or len(display_name) <= 1: 
+                    clean_name = super_clean_title(title_text)
+                    if not clean_name:
                         continue
-                    
+                        
                     simulated_rating = round(random.uniform(4.0, 4.9), 1)
                     
                     doc = {
-                        "name": display_name,
+                        "name": clean_name,
                         "ptt_title": title_text,
                         "area": location,
                         "rating": simulated_rating,
                         "type": "美食",
-                        "source": "PTT Food板大數據",
+                        "source": "PTT Food板全自動歷史大數據",
                         "sync_time": firestore.SERVER_TIMESTAMP
                     }
                     
-                    # 直接用純淨店名當作 Document ID 強制蓋寫去重
-                    db.collection("restaurants").document(display_name).set(doc)
+                    # 💡 用 clean_name 當 Document ID，多點幾次也絕對不會產生重複的垃圾資料！
+                    db.collection("restaurants").document(clean_name).set(doc)
                     total_inserted += 1
+            
+            # 💡 翻頁演算法：自動從 HTML 提取 PTT 的「‹ 上頁」按鈕
+            btn_tags = soup.find_all('a', class_='btn wide')
+            url = None 
+            for btn in btn_tags:
+                if "上頁" in btn.text and 'href' in btn.attrs:
+                    url = "https://www.ptt.cc" + btn['href']
+                    break
+            
+            time.sleep(0.3)
                         
         docs = db.collection("restaurants").order_by("sync_time", direction=firestore.Query.DESCENDING).get()
         restaurant_list = [doc.to_dict() for doc in docs]
@@ -128,20 +150,38 @@ def find_food():
         return render_template("result.html", total_inserted=total_inserted, total_in_db=total_in_db, restaurants=restaurant_list)
         
     except Exception as e:
-        return f"❌ 系統發生異常：{e}"
+        return f"❌ 爬蟲中斷（可能因數據過大超時），目前已同步：{total_inserted} 筆。原因：{e}"
 
 # ============================================================
-# 🤖 4. Webhook 通道 (具備地理字典拆解與智慧聯想分類)
+# 🗑️ 4. 資料庫優化管理：一鍵清空資料庫 (防污染重置功能)
+# ============================================================
+@app.route("/delete_all")
+def delete_all():
+    try:
+        safe_init_firebase()
+        db = firestore.client()
+        
+        # 批次撈出所有 document 並拔除
+        docs = db.collection("restaurants").list_documents()
+        count = 0
+        for doc in docs:
+            doc.delete()
+            count += 1
+            
+        return f"<h3>🧹 資料庫重置成功！</h3><p>已從 Firebase 雲端資料庫中完全移除共 {count} 筆美食快取。現在您可以返回首頁重新發動深度爬蟲！</p><br><a href='/'>➔ 返回管理首頁</a>"
+    except Exception as e:
+        return f"❌ 清空失敗，原因: {e}"
+
+# ============================================================
+# 🤖 5. Webhook 通道 (LINE 機器人核心對接組件)
 # ============================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
     req = request.get_json(force=True)
     query_result = req.get("queryResult", {})
     action = query_result.get("action", "")
-    
     parameters = query_result.get("parameters", {})
     
-    # 拆解 Dialogflow 丟過來的地理物件字典
     raw_location = parameters.get("location", "沙鹿")
     if isinstance(raw_location, dict):
         loc_str = raw_location.get("subadmin-area") or raw_location.get("city") or raw_location.get("admin-area") or "沙鹿"
