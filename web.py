@@ -110,23 +110,6 @@ def extract_info_from_content(content):
     return results
 
 # ============================================================
-# 🔗 TinyURL 縮網址工具（整合防呆機制）
-# ============================================================
-def shorten_url_tinyurl(long_url):
-    """
-    呼叫 TinyURL API 縮短傳入的長網址，若失敗或超時則原樣回傳長網址，確保機器人不崩潰
-    """
-    api_url = f"http://tinyurl.com/api-create.php?url={long_url}"
-    try:
-        # 設定 timeout=3 秒，避免 TinyURL 伺服器回應慢導致 Webhook 逾時
-        response = requests.get(api_url, timeout=3)
-        if response.status_code == 200 and response.text:
-            return response.text.strip()
-    except Exception as e:
-        print(f"⚠️ [縮網址失敗] 轉用原網址，原因: {e}")
-    return long_url
-
-# ============================================================
 # 🏠 1. 管理後台首頁
 # ============================================================
 @app.route("/")
@@ -404,14 +387,11 @@ def webhook():
                         rating = str(item_data.get("rating", "4.0"))
                         address = str(item_data.get("address", "暫無明確地址快取"))
                         
-                        # 💡 自動合成真正的 Google 導航標準搜尋網址
+                        # 💡 自動合成 Google 導航網址
                         map_query = address if "沙鹿" in address else f"台中市沙鹿區{address}"
-                        long_map_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(map_query)}"
+                        map_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(map_query)}"
                         
-                        # 🚀 呼叫縮網址 API 將長 URL 變短！
-                        short_map_url = shorten_url_tinyurl(long_map_url)
-                        
-                        result += f"🍱 推薦 {index}：{name}\n📍 地址：{address}\n⭐ 評分：{rating}\n🗺️ 導航：{short_map_url}\n\n"
+                        result += f"🍱 推薦 {index}：{name}\n📍 地址：{address}\n⭐ 評分：{rating}\n🗺️ 導航：{map_url}\n\n"
                     
                     info += result + "祝您用餐愉快！😋"
                 else:
