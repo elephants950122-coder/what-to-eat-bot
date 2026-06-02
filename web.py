@@ -404,7 +404,7 @@ def webhook():
                         rating = str(item_data.get("rating", "4.0"))
                         address = str(item_data.get("address", "暫無明確地址快取"))
                         
-                        # 💡 自動合成 Google 導航網址
+                        # 💡 自動合成真正的 Google 導航標準搜尋網址
                         map_query = address if "沙鹿" in address else f"台中市沙鹿區{address}"
                         long_map_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(map_query)}"
                         
