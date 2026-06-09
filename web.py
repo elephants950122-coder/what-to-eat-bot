@@ -283,7 +283,7 @@ def delete_all():
         return render_template("result.html", total_inserted=0, total_in_db=0, restaurants=[])
 
 # ============================================================
-# 🤖 5. Webhook 通道 (加入國外防呆與地圖導航功能)
+# 🤖 5. Webhook 通道 (雙重防呆與圖卡修復版)
 # ============================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -294,78 +294,13 @@ def webhook():
     
     # 💡 取得使用者完整輸入句子
     query_text = query_result.get("queryText", "")
-    
-    # 💡 [進階防呆 1]：先過濾掉「食物國籍詞彙」，避免誤擋 (例如: 想吃"日本料理"不該被當成要去"日本")
-    clean_query = query_text.replace("日本料理", "").replace("日式", "").replace("韓式", "").replace("韓國烤肉", "").replace("泰式", "").replace("義式", "").replace("美式", "").replace("港式", "")
-    
-    raw_location = parameters.get("location", "")
-    if isinstance(raw_location, dict):
-        loc_str = raw_location.get("subadmin-area") or raw_location.get("city") or raw_location.get("admin-area") or ""
-        user_location = loc_str.replace("區", "").replace("市", "").strip()
-    else:
-        user_location = str(raw_location).replace("區", "").replace("市", "").strip()
-        
-    # 💡 [進階防呆 2]：Dialogflow 沒抓到地點時，我們親自掃描有沒有提到國內外其他城市！
-    if not user_location:
-        out_of_bounds = [
-            "台北", "新北", "基隆", "桃園", "新竹", "苗栗", "彰化", "南投", "雲林", "嘉義", 
-            "台南", "高雄", "屏東", "宜蘭", "花蓮", "台東", "清水", "梧棲", "大甲", "大肚", "龍井",
-            "日本", "韓國", "泰國", "美國", "英國", "法國", "義大利", "中國", "大陸", "香港", "澳門", "東京", "大阪", "首爾", "外國", "國外"
-        ]
-        for place in out_of_bounds:
-            if place in clean_query:
-                user_location = place
-                break
-                
-    # 💡 [白名單審查]：只允許沙鹿、靜宜、弘光、台中
-    valid_keywords = ["沙鹿", "靜宜", "弘光", "台中"]
 
-    if any(kw in user_location for kw in valid_keywords) or any(kw in clean_query for kw in valid_keywords):
-        user_location = "沙鹿"  # 判定為有效，統一鎖定為沙鹿去撈資料庫
-    else:
-        if user_location:
-            # 確定有提到其他國家/城市，無情擋下！
-            info = f"🥺 抱歉！我是靜宜資管專屬的「沙鹿美食機器人」，我的雲端資料庫只有收錄沙鹿的美食，暫時沒有【{user_location}】的資料喔！你可以試著問我沙鹿的美食！"
-            return make_response(jsonify({"fulfillmentText": info}))
-        else:
-            # 什麼地點都沒提（例如「推薦宵夜」），安全放行
-            user_location = "沙鹿"
-
-    user_food_type = parameters.get("food_type", "") 
-    
-    # 💡 分類關鍵字大擴充字典
-    type_keywords = {
-        "宵夜": ["宵夜", "深夜", "燒烤", "串燒", "酒吧", "永和豆漿"],
-        "下午茶": ["下午茶", "點心", "蛋糕", "甜點", "咖啡", "冰品", "豆花", "手搖", "麵包", "烘焙"],
-        "早午餐": ["早午餐", "早餐", "BRUNCH", "蛋餅", "吐司", "漢堡", "飯糰"],
-        "咖哩": ["咖哩", "咖喱", "curry"],
-        "火鍋": ["火鍋", "鍋物", "麻辣鍋", "臭臭鍋", "小火鍋", "壽喜燒"],
-        "日式": ["日式", "拉麵", "壽司", "丼飯", "生魚片", "居酒屋", "日本料理"]
-    }
-    
-    # 💡 如果 Dialogflow 聽不懂食物名稱，我們直接掃描原句
-    if not user_food_type:
-        for food_category, keywords in type_keywords.items():
-            if food_category in query_text or any(kw in query_text for kw in keywords):
-                user_food_type = food_category
-                action = "recommend_restaurant"
-                break
-
-    # ==========================================
-    # 💡 [新增防呆 4]：廣泛攔截網！就算沒提到咖哩或火鍋，只要有這些關鍵字也放行
-    # ==========================================
-    general_food_keywords = ["美食", "想吃", "肚子餓", "推薦", "吃什麼", "有什麼好吃的", "餐廳"]
-    if action != "recommend_restaurant" and action != "GetFoodList":
-        if any(kw in query_text for kw in general_food_keywords):
-            action = "recommend_restaurant" # 強制賦予推薦動作
-
-    # ==========================================
-    # 💡 [新增功能 5]：全新高質感 LINE Flex Message 說明書 (修復版)
-    # ==========================================
+    # =========================================================================
+    # 💡 第一優先級：無敵圖卡說明書攔截器
+    # =========================================================================
     help_keywords = ["說明", "幫助", "教學", "怎麼用", "功能", "使用方法", "help", "菜單", "使用說明", "你好", "hi", "哈囉", "嗨", "說明書", "啊喂"]
     
     if any(kw in query_text.lower() for kw in help_keywords) or action == "input.welcome":
-        # 專屬全新設計：高質感美食 App 風格圖卡 (已修正 LINE 嚴格的排版格式)
         flex_payload = {
             "line": {
                 "type": "flex",
@@ -504,17 +439,78 @@ def webhook():
                 }
             }
         }
-
         return make_response(jsonify({
             "fulfillmentText": "請在 LINE 手機版上查看精美圖卡！",
-            "fulfillmentMessages": [
-                {
-                    "payload": flex_payload
-                }
-            ]
+            "fulfillmentMessages": [{"payload": flex_payload}]
         }))
 
-    # 預設的錯誤回覆（Fallback）
+    # =========================================================================
+    # 💡 接下來才是過濾地點與食物的邏輯
+    # =========================================================================
+    
+    # [進階防呆 1]：先過濾掉「食物國籍詞彙」，避免誤擋
+    clean_query = query_text.replace("日本料理", "").replace("日式", "").replace("韓式", "").replace("韓國烤肉", "").replace("泰式", "").replace("義式", "").replace("美式", "").replace("港式", "")
+    
+    raw_location = parameters.get("location", "")
+    if isinstance(raw_location, dict):
+        loc_str = raw_location.get("subadmin-area") or raw_location.get("city") or raw_location.get("admin-area") or ""
+        user_location = loc_str.replace("區", "").replace("市", "").strip()
+    else:
+        user_location = str(raw_location).replace("區", "").replace("市", "").strip()
+        
+    # [進階防呆 2]：Dialogflow 沒抓到地點時，親自掃描有沒有提到國內外其他城市！
+    if not user_location:
+        out_of_bounds = [
+            "台北", "新北", "基隆", "桃園", "新竹", "苗栗", "彰化", "南投", "雲林", "嘉義", 
+            "台南", "高雄", "屏東", "宜蘭", "花蓮", "台東", "清水", "梧棲", "大甲", "大肚", "龍井",
+            "日本", "韓國", "泰國", "美國", "英國", "法國", "義大利", "中國", "大陸", "香港", "澳門", "東京", "大阪", "首爾", "外國", "國外"
+        ]
+        for place in out_of_bounds:
+            if place in clean_query:
+                user_location = place
+                break
+                
+    # [白名單審查]：只允許沙鹿、靜宜、弘光、台中
+    valid_keywords = ["沙鹿", "靜宜", "弘光", "台中"]
+
+    if any(kw in user_location for kw in valid_keywords) or any(kw in clean_query for kw in valid_keywords):
+        user_location = "沙鹿"  # 判定為有效，統一鎖定為沙鹿去撈資料庫
+    else:
+        if user_location:
+            # 確定有提到其他國家/城市，無情擋下！
+            info = f"🥺 抱歉！我是靜宜資管專屬的「沙鹿美食機器人」，暫時沒有【{user_location}】的資料喔！你可以試著問我沙鹿的美食！"
+            return make_response(jsonify({"fulfillmentText": info}))
+        else:
+            # 什麼地點都沒提（例如「推薦宵夜」），安全放行
+            user_location = "沙鹿"
+
+    user_food_type = parameters.get("food_type", "") 
+    
+    # 💡 分類關鍵字大擴充字典
+    type_keywords = {
+        "宵夜": ["宵夜", "深夜", "燒烤", "串燒", "酒吧", "永和豆漿"],
+        "下午茶": ["下午茶", "點心", "蛋糕", "甜點", "咖啡", "冰品", "豆花", "手搖", "麵包", "烘焙"],
+        "早午餐": ["早午餐", "早餐", "BRUNCH", "蛋餅", "吐司", "漢堡", "飯糰"],
+        "咖哩": ["咖哩", "咖喱", "curry"],
+        "火鍋": ["火鍋", "鍋物", "麻辣鍋", "臭臭鍋", "小火鍋", "壽喜燒"],
+        "日式": ["日式", "拉麵", "壽司", "丼飯", "生魚片", "居酒屋", "日本料理"]
+    }
+    
+    # 💡 如果 Dialogflow 聽不懂食物名稱，我們直接掃描原句
+    if not user_food_type:
+        for food_category, keywords in type_keywords.items():
+            if food_category in query_text or any(kw in query_text for kw in keywords):
+                user_food_type = food_category
+                action = "recommend_restaurant"
+                break
+
+    # [新增防呆 4]：廣泛攔截網！就算沒提到咖哩或火鍋，只要有這些關鍵字也放行
+    general_food_keywords = ["美食", "想吃", "肚子餓", "推薦", "吃什麼", "有什麼好吃的", "餐廳"]
+    if action != "recommend_restaurant" and action != "GetFoodList":
+        if any(kw in query_text for kw in general_food_keywords):
+            action = "recommend_restaurant" # 強制賦予推薦動作
+
+    # 如果所有判斷都無法符合，給出防呆預設回覆
     info = "🥺 抱歉，我好像聽不太懂這個指令喔！\n你可以輸入「說明」或「你好」來查看使用教學卡片！"
     
     if action == "recommend_restaurant":
@@ -527,7 +523,6 @@ def webhook():
             if all_restaurants:
                 # 第一層篩選：符合地點
                 filtered_list = [r for r in all_restaurants if r.get("area") == "沙鹿"]
-                
                 if user_food_type and user_food_type in type_keywords:
                     keywords = type_keywords[user_food_type]
                     category_matched_list = []
@@ -537,41 +532,36 @@ def webhook():
                             category_matched_list.append(r)
                             
                     filtered_list = category_matched_list
-                    info = f"🤖 已為您連線 Firebase，從小組專屬大數據庫中精選出符合【沙鹿 {user_food_type}】的口袋名單：\n\n"
+                    info = f"🤖 已為您從小組專屬大數據庫中精選出符合【沙鹿 {user_food_type}】的口袋名單：\n\n"
                 else:
                     info = f"🤖 已為您從 Firebase 大數據中，隨機精選 5 間【沙鹿】在地好料：\n\n"
                 
                 if filtered_list:
                     sample_size = min(5, len(filtered_list))
                     random_list = random.sample(filtered_list, sample_size)
-                    
                     result = ""
                     for index, item_data in enumerate(random_list, 1):
                         name = str(item_data.get("name", "未知店家"))
                         rating = str(item_data.get("rating", "4.0"))
                         address = str(item_data.get("address", "暫無明確地址快取"))
                         
-                        # 💡 自動合成 Google 導航網址
                         map_query = address if "沙鹿" in address else f"台中市沙鹿區{address}"
                         map_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(map_query)}"
-                        
                         result += f"🍱 推薦 {index}：{name}\n📍 地址：{address}\n⭐ 評分：{rating}\n🗺️ 導航：{map_url}\n\n"
                     
                     info += result + "祝您用餐愉快！😋"
                 else:
-                    info = f"📋 報告！目前 Firebase 大數據庫中，暫時還沒有關於【沙鹿 {user_food_type}】的精確食記。"
+                    info = f"📋 報告！目前暫時還沒有關於【沙鹿 {user_food_type}】的精確食記。"
             else:
-                info = "📋 目前資料庫內暫無美食資料，請先前往管理後端進行網頁爬取同步！"
+                info = "📋 目前資料庫內暫無美食資料，請先前往管理後端同步！"
         except Exception as e:
             info = f"❌ 後端執行錯誤，原因: {str(e)}"
 
-    # 顯示完整資料庫清單的動作
     elif action == "GetFoodList":
         try:
             safe_init_firebase()
             db = firestore.client()
             docs = db.collection("restaurants").get()
-            
             titles = []
             for doc in docs:
                 item_data = doc.to_dict()
