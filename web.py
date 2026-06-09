@@ -359,7 +359,135 @@ def webhook():
         if any(kw in query_text for kw in general_food_keywords):
             action = "recommend_restaurant" # 強制賦予推薦動作
 
-    info = "抱歉，我目前無法處理這個動作喔！請試著告訴我「想吃沙鹿的美食」。"
+    # ==========================================
+    # 💡 [新增功能 5]：LINE Flex Message 終極圖卡說明書
+    # ==========================================
+    # 我們把打招呼也加進來，讓使用者一說你好就會跳出圖卡
+    help_keywords = ["說明", "幫助", "教學", "怎麼用", "功能", "使用方法", "help", "菜單", "使用說明", "你好", "hi", "哈囉", "嗨"]
+    
+    if any(kw in query_text.lower() for kw in help_keywords) or action == "input.welcome":
+        # 這是專門給 LINE 顯示的精美圖卡 JSON 格式
+        flex_payload = {
+            "line": {
+                "type": "flex",
+                "altText": "📖 沙鹿美食機器人使用說明書",
+                "contents": {
+                    "type": "bubble",
+                    "size": "mega",
+                    "header": {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "📖 沙鹿美食管家",
+                                "color": "#ffffff",
+                                "weight": "bold",
+                                "size": "sm"
+                            },
+                            {
+                                "type": "text",
+                                "text": "如何呼叫美食雷達？",
+                                "color": "#ffffff",
+                                "weight": "bold",
+                                "size": "xl",
+                                "margin": "md"
+                            }
+                        ],
+                        "backgroundColor": "#2c3e50",
+                        "paddingAll": "20px"
+                    },
+                    "body": {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "嗨！我是你的專屬美食管家 🍔\n直接【輸入文字】就可以呼叫我喔！以下是快速對話秘訣：",
+                                "wrap": True,
+                                "size": "sm",
+                                "color": "#666666",
+                                "margin": "md"
+                            },
+                            {
+                                "type": "separator",
+                                "margin": "lg"
+                            },
+                            {
+                                "type": "text",
+                                "text": "🎲 隨機推薦",
+                                "weight": "bold",
+                                "size": "md",
+                                "color": "#e67e22",
+                                "margin": "lg"
+                            },
+                            {
+                                "type": "text",
+                                "text": "• 範例：直接輸入「肚子餓了」或「沙鹿美食」",
+                                "size": "xs",
+                                "color": "#999999",
+                                "wrap": True
+                            },
+                            {
+                                "type": "text",
+                                "text": "🎯 指定種類",
+                                "weight": "bold",
+                                "size": "md",
+                                "color": "#27ae60",
+                                "margin": "lg"
+                            },
+                            {
+                                "type": "text",
+                                "text": "• 範例：輸入「推薦咖哩」或「想吃火鍋」",
+                                "size": "xs",
+                                "color": "#999999",
+                                "wrap": True
+                            },
+                            {
+                                "type": "text",
+                                "text": "📋 總覽清單",
+                                "weight": "bold",
+                                "size": "md",
+                                "color": "#2980b9",
+                                "margin": "lg"
+                            },
+                            {
+                                "type": "text",
+                                "text": "• 範例：輸入「查看全部資料」",
+                                "size": "xs",
+                                "color": "#999999",
+                                "wrap": True
+                            },
+                            {
+                                "type": "separator",
+                                "margin": "lg"
+                            },
+                            {
+                                "type": "text",
+                                "text": "💡 提示：本系統目前僅專注於提供『沙鹿區』的美食情報喔！快去試試看吧～",
+                                "wrap": True,
+                                "size": "xs",
+                                "color": "#aaaaaa",
+                                "margin": "md"
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+
+        # 透過 Dialogflow 的 fulfillmentMessages 傳遞 payload 給 LINE
+        return make_response(jsonify({
+            "fulfillmentText": "這是一份使用說明書，請在 LINE 手機版上查看精美圖卡！",
+            "fulfillmentMessages": [
+                {
+                    "payload": flex_payload
+                }
+            ]
+        }))
+
+    # 預設的錯誤回覆（Fallback），如果亂打字聽不懂，就引導他打「說明」
+    info = "🥺 抱歉，我好像聽不太懂這個指令喔！\n你可以輸入「說明」或「你好」來查看使用教學卡片！"
     
     if action == "recommend_restaurant":
         try:
