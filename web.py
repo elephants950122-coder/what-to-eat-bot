@@ -283,245 +283,189 @@ def delete_all():
         return render_template("result.html", total_inserted=0, total_in_db=0, restaurants=[])
 
 # ============================================================
-# 🤖 5. Webhook 通道 (雙重防呆與圖卡修復版)
+# 🤖 5. Webhook 通道 (終極圖卡修復版)
 # ============================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    req = request.get_json(force=True)
-    query_result = req.get("queryResult", {})
-    action = query_result.get("action", "")
-    parameters = query_result.get("parameters", {})
-    
-    # 💡 取得使用者完整輸入句子
-    query_text = query_result.get("queryText", "")
+    try:
+        req = request.get_json(force=True)
+        query_result = req.get("queryResult", {})
+        # 💡 防呆：確保 action 和 query_text 絕對不會是 None 導致當機
+        action = query_result.get("action") or ""
+        parameters = query_result.get("parameters", {})
+        query_text = query_result.get("queryText") or ""
 
-    # =========================================================================
-    # 💡 第一優先級：無敵圖卡說明書攔截器
-    # =========================================================================
-    help_keywords = ["說明", "幫助", "教學", "怎麼用", "功能", "使用方法", "help", "菜單", "使用說明", "你好", "hi", "哈囉", "嗨", "說明書", "啊喂"]
-    
-    if any(kw in query_text.lower() for kw in help_keywords) or action == "input.welcome":
-        flex_payload = {
-            "line": {
-                "type": "flex",
-                "altText": "🍟 沙鹿美食管家 - 使用秘笈",
-                "contents": {
-                    "type": "bubble",
-                    "size": "mega",
-                    "header": {
-                        "type": "box",
-                        "layout": "vertical",
-                        "backgroundColor": "#ff7675",
-                        "contents": [
-                            {
-                                "type": "text",
-                                "text": "🍽️ 靜宜資管專屬",
-                                "color": "#ffffff",
-                                "size": "sm",
-                                "weight": "bold"
-                            },
-                            {
-                                "type": "text",
-                                "text": "美食雷達使用秘笈",
-                                "color": "#ffffff",
-                                "size": "xl",
-                                "weight": "bold",
-                                "margin": "sm"
-                            }
-                        ],
-                        "paddingAll": "20px"
-                    },
-                    "body": {
-                        "type": "box",
-                        "layout": "vertical",
-                        "spacing": "md",
-                        "contents": [
-                            {
-                                "type": "text",
-                                "text": "不用按按鈕，直接跟我聊天吧！",
-                                "size": "sm",
-                                "color": "#636e72",
-                                "wrap": True,
-                                "weight": "bold"
-                            },
-                            {
-                                "type": "box",
-                                "layout": "vertical",
-                                "margin": "lg",
-                                "spacing": "sm",
-                                "contents": [
-                                    {
-                                        "type": "box",
-                                        "layout": "horizontal",
-                                        "spacing": "sm",
-                                        "contents": [
-                                            {"type": "text", "text": "🎲", "flex": 1, "size": "md"},
-                                            {"type": "text", "text": "想要隨機推薦？", "weight": "bold", "size": "sm", "color": "#2d3436", "flex": 5}
-                                        ]
-                                    },
-                                    {
-                                        "type": "text",
-                                        "text": "👉 請輸入「肚子餓了」或「沙鹿美食」",
-                                        "size": "xs",
-                                        "color": "#b2bec3",
-                                        "wrap": True,
-                                        "margin": "xs"
-                                    }
-                                ]
-                            },
-                            {
-                                "type": "box",
-                                "layout": "vertical",
-                                "margin": "lg",
-                                "spacing": "sm",
-                                "contents": [
-                                    {
-                                        "type": "box",
-                                        "layout": "horizontal",
-                                        "spacing": "sm",
-                                        "contents": [
-                                            {"type": "text", "text": "🎯", "flex": 1, "size": "md"},
-                                            {"type": "text", "text": "有特別想吃的？", "weight": "bold", "size": "sm", "color": "#2d3436", "flex": 5}
-                                        ]
-                                    },
-                                    {
-                                        "type": "text",
-                                        "text": "👉 請輸入「推薦咖哩」或「想吃宵夜」",
-                                        "size": "xs",
-                                        "color": "#b2bec3",
-                                        "wrap": True,
-                                        "margin": "xs"
-                                    }
-                                ]
-                            },
-                            {
-                                "type": "box",
-                                "layout": "vertical",
-                                "margin": "lg",
-                                "spacing": "sm",
-                                "contents": [
-                                    {
-                                        "type": "box",
-                                        "layout": "horizontal",
-                                        "spacing": "sm",
-                                        "contents": [
-                                            {"type": "text", "text": "📋", "flex": 1, "size": "md"},
-                                            {"type": "text", "text": "想看全部清單？", "weight": "bold", "size": "sm", "color": "#2d3436", "flex": 5}
-                                        ]
-                                    },
-                                    {
-                                        "type": "text",
-                                        "text": "👉 請輸入「查看全部資料」",
-                                        "size": "xs",
-                                        "color": "#b2bec3",
-                                        "wrap": True,
-                                        "margin": "xs"
-                                    }
-                                ]
-                            }
-                        ]
-                    },
-                    "footer": {
-                        "type": "box",
-                        "layout": "vertical",
-                        "contents": [
-                            {
-                                "type": "text",
-                                "text": "✨ 資料來源：PTT 美食版大數據",
-                                "color": "#fdcb6e",
-                                "size": "xs",
-                                "align": "center",
-                                "weight": "bold"
-                            }
-                        ],
-                        "backgroundColor": "#2d3436"
+        # =========================================================================
+        # 💡 第一優先級：無敵圖卡說明書攔截器
+        # =========================================================================
+        help_keywords = ["說明", "幫助", "教學", "怎麼用", "功能", "使用方法", "help", "菜單", "使用說明", "你好", "hi", "哈囉", "嗨", "說明書", "啊喂"]
+        
+        if any(kw in query_text.lower() for kw in help_keywords) or action == "input.welcome":
+            # 100% 符合 LINE 嚴格標準的安全排版圖卡
+            flex_payload = {
+                "line": {
+                    "type": "flex",
+                    "altText": "🍟 沙鹿美食管家 - 使用秘笈",
+                    "contents": {
+                        "type": "bubble",
+                        "header": {
+                            "type": "box",
+                            "layout": "vertical",
+                            "backgroundColor": "#ff7675",
+                            "paddingAll": "20px",
+                            "contents": [
+                                {
+                                    "type": "text",
+                                    "text": "🍽️ 靜宜資管專屬",
+                                    "color": "#ffffff",
+                                    "size": "sm",
+                                    "weight": "bold"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "美食雷達使用說明",
+                                    "color": "#ffffff",
+                                    "size": "xl",
+                                    "weight": "bold",
+                                    "margin": "sm"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "type": "box",
+                            "layout": "vertical",
+                            "spacing": "md",
+                            "contents": [
+                                {
+                                    "type": "text",
+                                    "text": "請直接輸入以下關鍵字：",
+                                    "size": "sm",
+                                    "color": "#636e72",
+                                    "weight": "bold"
+                                },
+                                {
+                                    "type": "separator",
+                                    "margin": "md"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "🎲 隨機推薦",
+                                    "weight": "bold",
+                                    "size": "md",
+                                    "color": "#d63031",
+                                    "margin": "md"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "👉 範例：「肚子餓了」、「沙鹿美食」",
+                                    "size": "xs",
+                                    "color": "#b2bec3"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "🎯 指定種類",
+                                    "weight": "bold",
+                                    "size": "md",
+                                    "color": "#0984e3",
+                                    "margin": "md"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "👉 範例：「推薦咖哩」、「想吃宵夜」",
+                                    "size": "xs",
+                                    "color": "#b2bec3"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "📋 總覽清單",
+                                    "weight": "bold",
+                                    "size": "md",
+                                    "color": "#00b894",
+                                    "margin": "md"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "👉 範例：「查看全部資料」",
+                                    "size": "xs",
+                                    "color": "#b2bec3"
+                                }
+                            ]
+                        }
                     }
                 }
             }
-        }
-        return make_response(jsonify({
-            "fulfillmentText": "請在 LINE 手機版上查看精美圖卡！",
-            "fulfillmentMessages": [{"payload": flex_payload}]
-        }))
+            
+            # 💡 核心修復：payload 必須放在最外層！
+            return make_response(jsonify({
+                "fulfillmentText": "請在 LINE 手機版上查看精美圖卡！",
+                "payload": flex_payload
+            }))
 
-    # =========================================================================
-    # 💡 接下來才是過濾地點與食物的邏輯
-    # =========================================================================
-    
-    # [進階防呆 1]：先過濾掉「食物國籍詞彙」，避免誤擋
-    clean_query = query_text.replace("日本料理", "").replace("日式", "").replace("韓式", "").replace("韓國烤肉", "").replace("泰式", "").replace("義式", "").replace("美式", "").replace("港式", "")
-    
-    raw_location = parameters.get("location", "")
-    if isinstance(raw_location, dict):
-        loc_str = raw_location.get("subadmin-area") or raw_location.get("city") or raw_location.get("admin-area") or ""
-        user_location = loc_str.replace("區", "").replace("市", "").strip()
-    else:
-        user_location = str(raw_location).replace("區", "").replace("市", "").strip()
+        # =========================================================================
+        # 💡 接下來才是過濾地點與食物的邏輯
+        # =========================================================================
+        clean_query = query_text.replace("日本料理", "").replace("日式", "").replace("韓式", "").replace("韓國烤肉", "").replace("泰式", "").replace("義式", "").replace("美式", "").replace("港式", "")
         
-    # [進階防呆 2]：Dialogflow 沒抓到地點時，親自掃描有沒有提到國內外其他城市！
-    if not user_location:
-        out_of_bounds = [
-            "台北", "新北", "基隆", "桃園", "新竹", "苗栗", "彰化", "南投", "雲林", "嘉義", 
-            "台南", "高雄", "屏東", "宜蘭", "花蓮", "台東", "清水", "梧棲", "大甲", "大肚", "龍井",
-            "日本", "韓國", "泰國", "美國", "英國", "法國", "義大利", "中國", "大陸", "香港", "澳門", "東京", "大阪", "首爾", "外國", "國外"
-        ]
-        for place in out_of_bounds:
-            if place in clean_query:
-                user_location = place
-                break
-                
-    # [白名單審查]：只允許沙鹿、靜宜、弘光、台中
-    valid_keywords = ["沙鹿", "靜宜", "弘光", "台中"]
-
-    if any(kw in user_location for kw in valid_keywords) or any(kw in clean_query for kw in valid_keywords):
-        user_location = "沙鹿"  # 判定為有效，統一鎖定為沙鹿去撈資料庫
-    else:
-        if user_location:
-            # 確定有提到其他國家/城市，無情擋下！
-            info = f"🥺 抱歉！我是靜宜資管專屬的「沙鹿美食機器人」，暫時沒有【{user_location}】的資料喔！你可以試著問我沙鹿的美食！"
-            return make_response(jsonify({"fulfillmentText": info}))
+        raw_location = parameters.get("location", "")
+        if isinstance(raw_location, dict):
+            loc_str = raw_location.get("subadmin-area") or raw_location.get("city") or raw_location.get("admin-area") or ""
+            user_location = loc_str.replace("區", "").replace("市", "").strip()
         else:
-            # 什麼地點都沒提（例如「推薦宵夜」），安全放行
-            user_location = "沙鹿"
+            user_location = str(raw_location).replace("區", "").replace("市", "").strip()
+            
+        if not user_location:
+            out_of_bounds = [
+                "台北", "新北", "基隆", "桃園", "新竹", "苗栗", "彰化", "南投", "雲林", "嘉義", 
+                "台南", "高雄", "屏東", "宜蘭", "花蓮", "台東", "清水", "梧棲", "大甲", "大肚", "龍井",
+                "日本", "韓國", "泰國", "美國", "英國", "法國", "義大利", "中國", "大陸", "香港", "澳門", "東京", "大阪", "首爾", "外國", "國外"
+            ]
+            for place in out_of_bounds:
+                if place in clean_query:
+                    user_location = place
+                    break
+                    
+        valid_keywords = ["沙鹿", "靜宜", "弘光", "台中"]
 
-    user_food_type = parameters.get("food_type", "") 
-    
-    # 💡 分類關鍵字大擴充字典
-    type_keywords = {
-        "宵夜": ["宵夜", "深夜", "燒烤", "串燒", "酒吧", "永和豆漿"],
-        "下午茶": ["下午茶", "點心", "蛋糕", "甜點", "咖啡", "冰品", "豆花", "手搖", "麵包", "烘焙"],
-        "早午餐": ["早午餐", "早餐", "BRUNCH", "蛋餅", "吐司", "漢堡", "飯糰"],
-        "咖哩": ["咖哩", "咖喱", "curry"],
-        "火鍋": ["火鍋", "鍋物", "麻辣鍋", "臭臭鍋", "小火鍋", "壽喜燒"],
-        "日式": ["日式", "拉麵", "壽司", "丼飯", "生魚片", "居酒屋", "日本料理"]
-    }
-    
-    # 💡 如果 Dialogflow 聽不懂食物名稱，我們直接掃描原句
-    if not user_food_type:
-        for food_category, keywords in type_keywords.items():
-            if food_category in query_text or any(kw in query_text for kw in keywords):
-                user_food_type = food_category
-                action = "recommend_restaurant"
-                break
+        if any(kw in user_location for kw in valid_keywords) or any(kw in clean_query for kw in valid_keywords):
+            user_location = "沙鹿" 
+        else:
+            if user_location:
+                info = f"🥺 抱歉！我是靜宜資管專屬的「沙鹿美食機器人」，暫時沒有【{user_location}】的資料喔！你可以試著問我沙鹿的美食！"
+                return make_response(jsonify({"fulfillmentText": info}))
+            else:
+                user_location = "沙鹿"
 
-    # [新增防呆 4]：廣泛攔截網！就算沒提到咖哩或火鍋，只要有這些關鍵字也放行
-    general_food_keywords = ["美食", "想吃", "肚子餓", "推薦", "吃什麼", "有什麼好吃的", "餐廳"]
-    if action != "recommend_restaurant" and action != "GetFoodList":
-        if any(kw in query_text for kw in general_food_keywords):
-            action = "recommend_restaurant" # 強制賦予推薦動作
+        user_food_type = parameters.get("food_type", "") 
+        type_keywords = {
+            "宵夜": ["宵夜", "深夜", "燒烤", "串燒", "酒吧", "永和豆漿"],
+            "下午茶": ["下午茶", "點心", "蛋糕", "甜點", "咖啡", "冰品", "豆花", "手搖", "麵包", "烘焙"],
+            "早午餐": ["早午餐", "早餐", "BRUNCH", "蛋餅", "吐司", "漢堡", "飯糰"],
+            "咖哩": ["咖哩", "咖喱", "curry"],
+            "火鍋": ["火鍋", "鍋物", "麻辣鍋", "臭臭鍋", "小火鍋", "壽喜燒"],
+            "日式": ["日式", "拉麵", "壽司", "丼飯", "生魚片", "居酒屋", "日本料理"]
+        }
+        
+        if not user_food_type:
+            for food_category, keywords in type_keywords.items():
+                if food_category in query_text or any(kw in query_text for kw in keywords):
+                    user_food_type = food_category
+                    action = "recommend_restaurant"
+                    break
 
-    # 如果所有判斷都無法符合，給出防呆預設回覆
-    info = "🥺 抱歉，我好像聽不太懂這個指令喔！\n你可以輸入「說明」或「你好」來查看使用教學卡片！"
-    
-    if action == "recommend_restaurant":
-        try:
+        general_food_keywords = ["美食", "想吃", "肚子餓", "推薦", "吃什麼", "有什麼好吃的", "餐廳"]
+        if action != "recommend_restaurant" and action != "GetFoodList":
+            if any(kw in query_text for kw in general_food_keywords):
+                action = "recommend_restaurant" 
+
+        info = "🥺 抱歉，我好像聽不太懂這個指令喔！\n你可以輸入「說明」或「你好」來查看使用教學卡片！"
+        
+        if action == "recommend_restaurant":
             safe_init_firebase()
             db = firestore.client()
             docs = db.collection("restaurants").get()
             all_restaurants = [doc.to_dict() for doc in docs]
             
             if all_restaurants:
-                # 第一層篩選：符合地點
                 filtered_list = [r for r in all_restaurants if r.get("area") == "沙鹿"]
                 if user_food_type and user_food_type in type_keywords:
                     keywords = type_keywords[user_food_type]
@@ -554,11 +498,8 @@ def webhook():
                     info = f"📋 報告！目前暫時還沒有關於【沙鹿 {user_food_type}】的精確食記。"
             else:
                 info = "📋 目前資料庫內暫無美食資料，請先前往管理後端同步！"
-        except Exception as e:
-            info = f"❌ 後端執行錯誤，原因: {str(e)}"
 
-    elif action == "GetFoodList":
-        try:
+        elif action == "GetFoodList":
             safe_init_firebase()
             db = firestore.client()
             docs = db.collection("restaurants").get()
@@ -573,10 +514,13 @@ def webhook():
                 info = "📋 目前資料庫收錄的沙鹿美食有：\n\n-- " + "\n-- ".join(unique_titles[:30])
             else:
                 info = "📋 目前資料庫內暫無美食資料。"
-        except Exception as e:
-            info = f"❌ 讀取清單失敗，原因: {str(e)}"
 
-    return make_response(jsonify({"fulfillmentText": info}))
+        return make_response(jsonify({"fulfillmentText": info}))
+        
+    except Exception as e:
+        # 💡 終極防護：就算真的發生預期外錯誤，也不會讓 LINE 當機，而是回傳錯誤原因方便除錯
+        print(f"Webhook Error: {e}")
+        return make_response(jsonify({"fulfillmentText": f"系統發生錯誤，請稍後再試。錯誤代碼：{str(e)}"}))
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, debug=True)
