@@ -283,7 +283,7 @@ def delete_all():
         return render_template("result.html", total_inserted=0, total_in_db=0, restaurants=[])
 
 # ============================================================
-# 🤖 5. Webhook 通道 (終極圖卡穿透修復版)
+# 🤖 5. Webhook 通道 (終極極速圖卡版)
 # ============================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -300,8 +300,6 @@ def webhook():
         help_keywords = ["說明", "幫助", "教學", "怎麼用", "功能", "使用方法", "help", "菜單", "使用說明", "你好", "hi", "哈囉", "嗨", "說明書", "啊喂"]
         
         if any(kw in query_text.lower() for kw in help_keywords) or action == "input.welcome":
-            
-            # 💡 這是 LINE Flex Message 的本體
             flex_content = {
                 "type": "bubble",
                 "header": {
@@ -367,7 +365,7 @@ def webhook():
                         },
                         {
                             "type": "text",
-                            "text": "👉 範例：「推薦咖哩」、「想吃宵夜」",
+                            "text": "👉 範例：「推薦沙鹿早餐」、「想吃宵夜」",
                             "size": "xs",
                             "color": "#b2bec3"
                         },
@@ -388,24 +386,83 @@ def webhook():
                     ]
                 }
             }
-
-            # 💡 核心修復：這才是 Dialogflow 認可、能成功轉發給 LINE 的結構！
             return make_response(jsonify({
-                "fulfillmentMessages": [
-                    {
-                        "payload": {
-                            "line": {
-                                "type": "flex",
-                                "altText": "🍟 沙鹿美食管家 - 使用秘笈",
-                                "contents": flex_content
-                            }
-                        }
-                    }
-                ]
+                "fulfillmentMessages": [{"payload": {"line": {"type": "flex", "altText": "🍟 沙鹿美食管家 - 使用秘笈", "contents": flex_content}}}]
             }))
 
         # =========================================================================
-        # 💡 接下來才是過濾地點與食物的邏輯
+        # 💡 強制攔截「查看全部資料」，直接回傳網址圖卡 (不再去 Firebase 撈資料，保證極速不當機)
+        # =========================================================================
+        list_keywords = ["查看全部資料", "查看全部", "全部資料", "所有清單", "總覽"]
+        if any(kw in query_text for kw in list_keywords):
+            # ⚠️ 記得把下面的網址換成你們小組 Vercel 部署出來的真實網址喔！
+            your_website_url = "https://your-vercel-app-url.vercel.app/" 
+            
+            list_payload = {
+                "type": "bubble",
+                "size": "mega",
+                "header": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "backgroundColor": "#00b894",
+                    "paddingAll": "20px",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "📋 靜宜資管專屬",
+                            "color": "#ffffff",
+                            "size": "sm",
+                            "weight": "bold"
+                        },
+                        {
+                            "type": "text",
+                            "text": "美食大數據全收錄",
+                            "color": "#ffffff",
+                            "size": "xl",
+                            "weight": "bold",
+                            "margin": "sm"
+                        }
+                    ]
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "spacing": "md",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "資料筆數太多啦！為了給您最好的閱讀體驗，請點擊下方按鈕前往「專屬網頁版」查看最完整的沙鹿美食清單喔！",
+                            "wrap": True,
+                            "size": "sm",
+                            "color": "#636e72"
+                        }
+                    ]
+                },
+                "footer": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "spacing": "sm",
+                    "contents": [
+                        {
+                            "type": "button",
+                            "style": "primary",
+                            "height": "sm",
+                            "color": "#0984e3",
+                            "action": {
+                                "type": "uri",
+                                "label": "🌐 前往完整資料庫",
+                                "uri": your_website_url
+                            }
+                        }
+                    ]
+                }
+            }
+            return make_response(jsonify({
+                "fulfillmentMessages": [{"payload": {"line": {"type": "flex", "altText": "📋 沙鹿美食全收錄清單", "contents": list_payload}}}]
+            }))
+
+        # =========================================================================
+        # 💡 過濾地點與食物的邏輯
         # =========================================================================
         clean_query = query_text.replace("日本料理", "").replace("日式", "").replace("韓式", "").replace("韓國烤肉", "").replace("泰式", "").replace("義式", "").replace("美式", "").replace("港式", "")
         
@@ -419,7 +476,7 @@ def webhook():
         if not user_location:
             out_of_bounds = [
                 "台北", "新北", "基隆", "桃園", "新竹", "苗栗", "彰化", "南投", "雲林", "嘉義", 
-                "台南", "高雄", "屏 খোলা東", "宜蘭", "花蓮", "台東", "清水", "梧棲", "大甲", "大肚", "龍井",
+                "台南", "高雄", "屏東", "宜蘭", "花蓮", "台東", "清水", "梧棲", "大甲", "大肚", "龍井",
                 "日本", "韓國", "泰國", "美國", "英國", "法國", "義大利", "中國", "大陸", "香港", "澳門", "東京", "大阪", "首爾", "外國", "國外"
             ]
             for place in out_of_bounds:
@@ -433,7 +490,7 @@ def webhook():
             user_location = "沙鹿" 
         else:
             if user_location:
-                info = f"🥺 抱歉！我是靜宜資管專屬的「沙鹿美食機器人」，暫時沒有【{user_location}】的資料喔！你可以試著問我沙鹿的美食！"
+                info = f"🥺 抱歉！我是專屬的「沙鹿美食機器人」，暫時沒有【{user_location}】的資料喔！你可以試著問我沙鹿的美食！"
                 return make_response(jsonify({"fulfillmentText": info}))
             else:
                 user_location = "沙鹿"
@@ -449,6 +506,7 @@ def webhook():
         }
         
         if not user_food_type:
+            user_food_type = ""
             for food_category, keywords in type_keywords.items():
                 if food_category in query_text or any(kw in query_text for kw in keywords):
                     user_food_type = food_category
@@ -456,7 +514,7 @@ def webhook():
                     break
 
         general_food_keywords = ["美食", "想吃", "肚子餓", "推薦", "吃什麼", "有什麼好吃的", "餐廳"]
-        if action != "recommend_restaurant" and action != "GetFoodList":
+        if action != "recommend_restaurant":
             if any(kw in query_text for kw in general_food_keywords):
                 action = "recommend_restaurant" 
 
@@ -502,87 +560,7 @@ def webhook():
             else:
                 info = "📋 目前資料庫內暫無美食資料，請先前往管理後端同步！"
 
-        elif action == "GetFoodList":
-            # 💡 [新增功能] 將文字清單改為超連結圖卡，引導至 Vercel 網頁端
-            
-            # ⚠️ 請將這裡替換成你真實的 Vercel 網址 (記得要有 https://)
-            your_website_url = "https://what-to-eat-bot.vercel.app/" 
-            
-            list_payload = {
-                "line": {
-                    "type": "flex",
-                    "altText": "📋 沙鹿美食全收錄清單",
-                    "contents": {
-                        "type": "bubble",
-                        "size": "mega",
-                        "header": {
-                            "type": "box",
-                            "layout": "vertical",
-                            "backgroundColor": "#00b894",
-                            "paddingAll": "20px",
-                            "contents": [
-                                {
-                                    "type": "text",
-                                    "text": "📋 靜宜資管專屬",
-                                    "color": "#ffffff",
-                                    "size": "sm",
-                                    "weight": "bold"
-                                },
-                                {
-                                    "type": "text",
-                                    "text": "美食大數據全收錄",
-                                    "color": "#ffffff",
-                                    "size": "xl",
-                                    "weight": "bold",
-                                    "margin": "sm"
-                                }
-                            ]
-                        },
-                        "body": {
-                            "type": "box",
-                            "layout": "vertical",
-                            "spacing": "md",
-                            "contents": [
-                                {
-                                    "type": "text",
-                                    "text": "資料筆數太多啦！為了給您最好的閱讀體驗，請點擊下方按鈕前往「專屬網頁版」查看最完整的沙鹿美食清單喔！",
-                                    "wrap": True,
-                                    "size": "sm",
-                                    "color": "#636e72"
-                                }
-                            ]
-                        },
-                        "footer": {
-                            "type": "box",
-                            "layout": "vertical",
-                            "spacing": "sm",
-                            "contents": [
-                                {
-                                    "type": "button",
-                                    "style": "primary",
-                                    "height": "sm",
-                                    "color": "#0984e3",
-                                    "action": {
-                                        "type": "uri",
-                                        "label": "🌐 前往完整資料庫",
-                                        "uri": your_website_url
-                                    }
-                                }
-                            ],
-                            "flex": 0
-                        }
-                    }
-                }
-            }
-
-            return make_response(jsonify({
-                "fulfillmentText": f"資料筆數太多啦！請前往我們的網站查看完整清單：{your_website_url}",
-                "fulfillmentMessages": [
-                    {
-                        "payload": list_payload
-                    }
-                ]
-            }))
+        return make_response(jsonify({"fulfillmentText": info}))
         
     except Exception as e:
         print(f"Webhook Error: {e}")
