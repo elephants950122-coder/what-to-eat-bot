@@ -283,14 +283,13 @@ def delete_all():
         return render_template("result.html", total_inserted=0, total_in_db=0, restaurants=[])
 
 # ============================================================
-# 🤖 5. Webhook 通道 (終極圖卡修復版)
+# 🤖 5. Webhook 通道 (終極圖卡穿透修復版)
 # ============================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
     try:
         req = request.get_json(force=True)
         query_result = req.get("queryResult", {})
-        # 💡 防呆：確保 action 和 query_text 絕對不會是 None 導致當機
         action = query_result.get("action") or ""
         parameters = query_result.get("parameters", {})
         query_text = query_result.get("queryText") or ""
@@ -301,104 +300,108 @@ def webhook():
         help_keywords = ["說明", "幫助", "教學", "怎麼用", "功能", "使用方法", "help", "菜單", "使用說明", "你好", "hi", "哈囉", "嗨", "說明書", "啊喂"]
         
         if any(kw in query_text.lower() for kw in help_keywords) or action == "input.welcome":
-            # 100% 符合 LINE 嚴格標準的安全排版圖卡
-            flex_payload = {
-                "line": {
-                    "type": "flex",
-                    "altText": "🍟 沙鹿美食管家 - 使用秘笈",
-                    "contents": {
-                        "type": "bubble",
-                        "header": {
-                            "type": "box",
-                            "layout": "vertical",
-                            "backgroundColor": "#ff7675",
-                            "paddingAll": "20px",
-                            "contents": [
-                                {
-                                    "type": "text",
-                                    "text": "🍽️ 靜宜資管專屬",
-                                    "color": "#ffffff",
-                                    "size": "sm",
-                                    "weight": "bold"
-                                },
-                                {
-                                    "type": "text",
-                                    "text": "美食雷達使用說明",
-                                    "color": "#ffffff",
-                                    "size": "xl",
-                                    "weight": "bold",
-                                    "margin": "sm"
-                                }
-                            ]
+            
+            # 💡 這是 LINE Flex Message 的本體
+            flex_content = {
+                "type": "bubble",
+                "header": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "backgroundColor": "#ff7675",
+                    "paddingAll": "20px",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "🍽️ 靜宜資管專屬",
+                            "color": "#ffffff",
+                            "size": "sm",
+                            "weight": "bold"
                         },
-                        "body": {
-                            "type": "box",
-                            "layout": "vertical",
-                            "spacing": "md",
-                            "contents": [
-                                {
-                                    "type": "text",
-                                    "text": "請直接輸入以下關鍵字：",
-                                    "size": "sm",
-                                    "color": "#636e72",
-                                    "weight": "bold"
-                                },
-                                {
-                                    "type": "separator",
-                                    "margin": "md"
-                                },
-                                {
-                                    "type": "text",
-                                    "text": "🎲 隨機推薦",
-                                    "weight": "bold",
-                                    "size": "md",
-                                    "color": "#d63031",
-                                    "margin": "md"
-                                },
-                                {
-                                    "type": "text",
-                                    "text": "👉 範例：「肚子餓了」、「沙鹿美食」",
-                                    "size": "xs",
-                                    "color": "#b2bec3"
-                                },
-                                {
-                                    "type": "text",
-                                    "text": "🎯 指定種類",
-                                    "weight": "bold",
-                                    "size": "md",
-                                    "color": "#0984e3",
-                                    "margin": "md"
-                                },
-                                {
-                                    "type": "text",
-                                    "text": "👉 範例：「推薦咖哩」、「想吃宵夜」",
-                                    "size": "xs",
-                                    "color": "#b2bec3"
-                                },
-                                {
-                                    "type": "text",
-                                    "text": "📋 總覽清單",
-                                    "weight": "bold",
-                                    "size": "md",
-                                    "color": "#00b894",
-                                    "margin": "md"
-                                },
-                                {
-                                    "type": "text",
-                                    "text": "👉 範例：「查看全部資料」",
-                                    "size": "xs",
-                                    "color": "#b2bec3"
-                                }
-                            ]
+                        {
+                            "type": "text",
+                            "text": "美食雷達使用說明",
+                            "color": "#ffffff",
+                            "size": "xl",
+                            "weight": "bold",
+                            "margin": "sm"
                         }
-                    }
+                    ]
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "spacing": "md",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "請直接輸入以下關鍵字：",
+                            "size": "sm",
+                            "color": "#636e72",
+                            "weight": "bold"
+                        },
+                        {
+                            "type": "separator",
+                            "margin": "md"
+                        },
+                        {
+                            "type": "text",
+                            "text": "🎲 隨機推薦",
+                            "weight": "bold",
+                            "size": "md",
+                            "color": "#d63031",
+                            "margin": "md"
+                        },
+                        {
+                            "type": "text",
+                            "text": "👉 範例：「肚子餓了」、「沙鹿美食」",
+                            "size": "xs",
+                            "color": "#b2bec3"
+                        },
+                        {
+                            "type": "text",
+                            "text": "🎯 指定種類",
+                            "weight": "bold",
+                            "size": "md",
+                            "color": "#0984e3",
+                            "margin": "md"
+                        },
+                        {
+                            "type": "text",
+                            "text": "👉 範例：「推薦咖哩」、「想吃宵夜」",
+                            "size": "xs",
+                            "color": "#b2bec3"
+                        },
+                        {
+                            "type": "text",
+                            "text": "📋 總覽清單",
+                            "weight": "bold",
+                            "size": "md",
+                            "color": "#00b894",
+                            "margin": "md"
+                        },
+                        {
+                            "type": "text",
+                            "text": "👉 範例：「查看全部資料」",
+                            "size": "xs",
+                            "color": "#b2bec3"
+                        }
+                    ]
                 }
             }
-            
-            # 💡 核心修復：payload 必須放在最外層！
+
+            # 💡 核心修復：這才是 Dialogflow 認可、能成功轉發給 LINE 的結構！
             return make_response(jsonify({
-                "fulfillmentText": "請在 LINE 手機版上查看精美圖卡！",
-                "payload": flex_payload
+                "fulfillmentMessages": [
+                    {
+                        "payload": {
+                            "line": {
+                                "type": "flex",
+                                "altText": "🍟 沙鹿美食管家 - 使用秘笈",
+                                "contents": flex_content
+                            }
+                        }
+                    }
+                ]
             }))
 
         # =========================================================================
@@ -416,7 +419,7 @@ def webhook():
         if not user_location:
             out_of_bounds = [
                 "台北", "新北", "基隆", "桃園", "新竹", "苗栗", "彰化", "南投", "雲林", "嘉義", 
-                "台南", "高雄", "屏東", "宜蘭", "花蓮", "台東", "清水", "梧棲", "大甲", "大肚", "龍井",
+                "台南", "高雄", "屏 খোলা東", "宜蘭", "花蓮", "台東", "清水", "梧棲", "大甲", "大肚", "龍井",
                 "日本", "韓國", "泰國", "美國", "英國", "法國", "義大利", "中國", "大陸", "香港", "澳門", "東京", "大阪", "首爾", "外國", "國外"
             ]
             for place in out_of_bounds:
@@ -518,7 +521,6 @@ def webhook():
         return make_response(jsonify({"fulfillmentText": info}))
         
     except Exception as e:
-        # 💡 終極防護：就算真的發生預期外錯誤，也不會讓 LINE 當機，而是回傳錯誤原因方便除錯
         print(f"Webhook Error: {e}")
         return make_response(jsonify({"fulfillmentText": f"系統發生錯誤，請稍後再試。錯誤代碼：{str(e)}"}))
 
