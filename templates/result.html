@@ -37,7 +37,6 @@
 
     <div class="container mb-5">
         
-        <!-- Flask Flash 訊息提示區 -->
         <div class="row justify-content-center mb-4">
             <div class="col-md-10 text-center">
                 {% with messages = get_flashed_messages(with_categories=true) %}
@@ -52,7 +51,6 @@
             </div>
         </div>
 
-        <!-- 統計數據卡片 -->
         <div class="card p-4 text-center mb-5 mx-auto" style="max-width: 800px;">
             <h4 class="text-muted fw-bold mb-3"><i class="fas fa-database text-primary me-2"></i>雲端資料庫目前累積資料總計</h4>
             <div class="display-1 fw-bold text-danger mb-2">
@@ -61,29 +59,47 @@
             <p class="text-secondary m-0">所有收集到的沙鹿在地美食大數據已全數整齊排列於下方表格</p>
         </div>
 
-        <!-- 💡 重點更新：按鈕控制區塊，加入「重置資料庫」 -->
-        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3">
+        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
             <h3 class="fw-bold m-0 text-dark"><i class="fas fa-list text-primary me-2"></i>雲端資料庫完整清單</h3>
             <div class="d-flex gap-2 flex-wrap">
-                <!-- 繼續爬取按鈕 -->
                 <a href="/find_food" class="btn btn-warning btn-custom text-dark px-3 py-2 shadow-sm">
                     <i class="fas fa-forward me-1"></i>繼續爬下一頁
                 </a>
                 
-                <!-- 新增：重置資料庫按鈕 (紅色警告款) -->
                 <a href="/delete_all" class="btn btn-danger btn-custom px-3 py-2 shadow-sm" onclick="return confirm('⚠️ 警告！這將會完全清空 Firebase 資料庫中所有的沙鹿美食數據，確定要執行重置嗎？')">
                     <i class="fas fa-trash-alt me-1"></i>重置清空資料庫
                 </a>
 
-                <!-- 回到首頁按鈕 -->
                 <a href="/" class="btn btn-outline-secondary btn-custom px-3 py-2">
                     <i class="fas fa-arrow-left me-1"></i>回到管理首頁
                 </a>
             </div>
         </div>
 
-        <!-- 資料表格 -->
-        <div class="card overflow-hidden">
+        <div class="row my-4">
+            <div class="col-md-5 mb-3">
+                <div class="card h-100 shadow-sm border-0">
+                    <div class="card-body">
+                        <h5 class="card-title fw-bold text-primary mb-3"><i class="fas fa-search me-2"></i>數據即時篩選</h5>
+                        <p class="card-text text-muted small mb-4">免刷新網頁，輸入店名、地址或評分即可動態過濾下方表格。</p>
+                        <input type="text" id="searchBar" class="form-control form-control-lg bg-light" placeholder="輸入關鍵字（如：火鍋、沙鹿、4.5）...">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-7 mb-3">
+                <div class="card h-100 shadow-sm border-0">
+                    <div class="card-body text-center d-flex flex-column align-items-center justify-content-center">
+                        <h5 class="card-title fw-bold text-info mb-3"><i class="fas fa-chart-pie me-2"></i>沙鹿美食種類分佈大數據</h5>
+                        <div style="width: 100%; max-height: 220px; display: flex; justify-content: center;">
+                            <canvas id="foodTypeChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card overflow-hidden shadow-sm border-0">
             <div class="table-responsive">
                 <table class="table table-hover table-striped mb-0">
                     <thead>
@@ -101,7 +117,7 @@
                             <td class="text-center fw-bold text-muted">{{ loop.index }}</td>
                             <td class="fw-bold text-primary">{{ r.name }}</td>
                             <td>
-                                <span class="badge bg-light text-dark border border-secondary p-2">
+                                <span class="badge bg-light text-dark border border-secondary p-2 text-wrap text-start">
                                     <i class="fas fa-map-pin text-danger me-1"></i> {{ r.address }}
                                 </span>
                             </td>
@@ -122,5 +138,85 @@
             </div>
         </div>
     </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // 1️⃣ 前端即時搜尋過濾
+        document.getElementById('searchBar').addEventListener('keyup', function() {
+            const keyword = this.value.toLowerCase();
+            const rows = document.querySelectorAll('table tbody tr');
+            
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(keyword) ? '' : 'none';
+            });
+        });
+
+        // 2️⃣ 自動統計現有表格的美食種類並繪製圓餅圖
+        document.addEventListener("DOMContentLoaded", function() {
+            
+            // 💡 終極修復：確保 Jinja2 正確轉譯 JSON 物件，加上 |safe 避免 HTML 跳脫
+            const restaurants = {{ restaurants | tojson | safe if restaurants else '[]' }};
+            
+            const typeCounts = {
+                "火鍋": 0, "宵夜": 0, "早午餐": 0, "下午茶": 0, "日式": 0, "一般美食": 0
+            };
+            
+            const typeKeywords = {
+                "火鍋": ["鍋", "麻辣", "壽喜"], "宵夜": ["宵夜", "深夜", "燒烤", "串燒", "酒吧"],
+                "早午餐": ["早午", "早餐", "蛋餅", "吐司"], "下午茶": ["甜點", "咖啡", "冰", "豆花", "蛋糕"],
+                "日式": ["拉麵", "壽司", "丼飯", "日式", "居酒屋"]
+            };
+
+            // 如果沒有資料就不畫圖
+            if (!restaurants || restaurants.length === 0) return;
+
+            restaurants.forEach(r => {
+                const title = (r.ptt_title || "").toUpperCase();
+                let matched = false;
+                for (const [type, kws] of Object.entries(typeKeywords)) {
+                    if (kws.some(kw => title.includes(kw))) {
+                        typeCounts[type]++;
+                        matched = true;
+                        break;
+                    }
+                }
+                if (!matched) typeCounts["一般美食"]++;
+            });
+
+            const labels = [];
+            const data = [];
+            for (const [type, count] of Object.entries(typeCounts)) {
+                if (count > 0) {
+                    labels.push(type);
+                    data.push(count);
+                }
+            }
+
+            // 如果所有分類都是 0，就不畫圖
+            if (data.length === 0) return;
+
+            const ctx = document.getElementById('foodTypeChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: ['#ff7675', '#0984e3', '#00b894', '#fdcb6e', '#a29bfe', '#b2bec3'],
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: { 
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { 
+                        legend: { position: 'right', labels: { font: { size: 14 } } }
+                    }
+                }
+            });
+        });
+    </script>
 </body>
 </html>

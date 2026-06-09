@@ -54,9 +54,16 @@
                         </p>
                         <hr class="opacity-10">
                         <div class="mt-auto">
-                            <a href="/find_food" class="btn btn-primary btn-custom w-100 shadow-sm">
+                            <a href="/find_food" id="crawlBtn" class="btn btn-primary btn-custom w-100 shadow-sm">
                                 <i class="fas fa-play me-2"></i>執行全自動爬蟲同步
                             </a>
+                            
+                            <div id="loadingSection" class="text-center my-3" style="display: none;">
+                                <div class="spinner-border text-danger" role="status" style="width: 2.5rem; height: 2.5rem;"></div>
+                                <h5 class="mt-2 text-danger fw-bold">🛰️ 大數據深度雷達穿透中...</h5>
+                                <p class="text-muted small mb-0">正在辨識內文實體地址，請勿重新整理網頁。</p>
+                            </div>
+
                             <div class="text-center mt-3">
                                 <a href="/delete_all" class="text-danger small fw-bold" onclick="return confirm('⚠️ 警告！這將會完全清空 Firebase 資料庫中所有的沙鹿美食快取數據，確定要執行重置嗎？')">
                                     <i class="fas fa-trash-alt me-1"></i>重置資料庫並清空垃圾資料
@@ -114,6 +121,33 @@
 
         </div>
 
+        <div class="card my-4 shadow-sm" style="border-radius: 15px;">
+            <div class="card-header bg-dark text-white fw-bold" style="border-radius: 15px 15px 0 0;">✍️ 管理員專區：手動補登隱藏版店家</div>
+            <div class="card-body p-4">
+                <form action="/add_manual_restaurant" method="POST" class="row g-3 align-items-center">
+                    <div class="col-md-5">
+                        <label class="form-label small fw-bold text-muted">店家名稱</label>
+                        <input type="text" name="shop_name" class="form-control" placeholder="輸入正式店名（如：沙鹿無名肉圓）" required>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label small fw-bold text-muted">店家詳細地址</label>
+                        <input type="text" name="shop_address" class="form-control" placeholder="輸入詳細地址（如：台中市沙鹿區大安街X號）" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold text-muted">評分權重</label>
+                        <select name="shop_rating" class="form-select">
+                            <option value="4.9">⭐ 4.9 (神店)</option>
+                            <option value="4.5" selected>⭐ 4.5 (推薦)</option>
+                            <option value="4.0">⭐ 4.0 (平價)</option>
+                        </select>
+                    </div>
+                    <div class="col-12 text-end mt-4">
+                        <button type="submit" class="btn btn-outline-dark px-4 fw-bold">➕ 確認手動寫入雲端資料庫</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <div class="card border-0 shadow-sm p-4 text-center bg-white mb-5" style="border-radius: 15px;">
             <p class="text-muted fw-bold m-0" style="font-size: 0.95rem;"><i class="fas fa-plug text-warning me-2"></i>Dialogflow Fulfillment Webhook 後端對接專用地址</p>
             <div class="input-group my-2 mx-auto" style="max-width: 600px;">
@@ -130,6 +164,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // 💡 修正四：將所有 JavaScript 控制邏輯整併在同一個區塊，乾淨好維護
         document.getElementById("webhookUrl").value = window.location.origin + "/webhook";
 
         function copyWebhook() {
@@ -157,6 +192,12 @@
                 btn.innerHTML = "<i class='fas fa-copy'></i>點擊複製機器人 ID";
             }, 2000);
         }
+
+        // 爬蟲按鈕監聽
+        document.getElementById('crawlBtn').addEventListener('click', function(e) {
+            this.style.display = 'none'; // 按鈕隱藏
+            document.getElementById('loadingSection').style.display = 'block'; // 外部動畫完美浮現
+        });
     </script>
 </body>
 </html>

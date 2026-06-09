@@ -566,5 +566,46 @@ def webhook():
         print(f"Webhook Error: {e}")
         return make_response(jsonify({"fulfillmentText": f"系統發生錯誤，請稍後再試。錯誤代碼：{str(e)}"}))
 
+# ============================================================
+# 📝 額外擴充：管理員手動補登店家路由 (CRUD 新增功能)
+# ============================================================
+@app.route("/add_manual_restaurant", methods=["POST"])
+def add_manual_restaurant():
+    try:
+        # 讀取表單傳過來的資料
+        shop_name = request.form.get("shop_name", "").strip()
+        shop_address = request.form.get("shop_address", "").strip()
+        shop_rating = request.form.get("shop_rating", "4.5")
+        
+        if not shop_name or not shop_address:
+            flash("❌ 補登失敗：店名與地址為必填欄位！", "danger")
+            return redirect(url_for('home'))
+            
+        safe_init_firebase()
+        db = firestore.client()
+        
+        # 為了格式統一，我們以地址或店名作為 document ID
+        doc_id = shop_address if shop_address else shop_name
+        
+        doc_data = {
+            "name": shop_name,
+            "address": shop_address,
+            "ptt_title": f"[手動補登] {shop_name} - 在地激推",
+            "area": "沙鹿",
+            "rating": float(shop_rating),
+            "type": "美食",
+            "source": "管理員人工補登",
+            "sync_time": firestore.SERVER_TIMESTAMP
+        }
+        
+        # 直接寫入 FirebaseRestaurants 集合中
+        db.collection("restaurants").document(doc_id).set(doc_data)
+        flash(f"🎉 成功手動補登隱藏版美食：【{shop_name}】至雲端資料庫！", "success")
+        
+    except Exception as e:
+        flash(f"❌ 手動補登發生預期外錯誤: {e}", "danger")
+        
+    return redirect(url_for('home'))
+
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, debug=True)
