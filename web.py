@@ -607,5 +607,40 @@ def add_manual_restaurant():
         
     return redirect(url_for('home'))
 
+# ============================================================
+# 🗑️ 額外擴充：單筆刪除店家路由 (CRUD 刪除功能)
+# ============================================================
+@app.route("/delete_restaurant", methods=["POST"])
+def delete_restaurant():
+    try:
+        shop_name = request.form.get("shop_name", "").strip()
+        
+        safe_init_firebase()
+        db = firestore.client()
+        
+        if shop_name:
+            # 尋找該店名的所有快取紀錄並刪除
+            docs = db.collection("restaurants").where("name", "==", shop_name).stream()
+            deleted_count = 0
+            for doc in docs:
+                doc.reference.delete()
+                deleted_count += 1
+                
+            if deleted_count > 0:
+                flash(f"🗑️ 已成功刪除單筆紀錄：【{shop_name}】", "success")
+            else:
+                flash(f"⚠️ 找不到該店家：【{shop_name}】", "warning")
+        
+        # 刪除完畢後，重新撈取最新資料庫清單，讓網頁無縫刷新
+        docs = db.collection("restaurants").order_by("sync_time", direction=firestore.Query.DESCENDING).get()
+        restaurant_list = [doc.to_dict() for doc in docs]
+        total_in_db = len(restaurant_list)
+        
+        return render_template("result.html", total_inserted=0, total_in_db=total_in_db, restaurants=restaurant_list)
+        
+    except Exception as e:
+        flash(f"❌ 刪除單筆資料時發生錯誤: {e}", "danger")
+        return redirect(url_for('home'))
+
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, debug=True)

@@ -108,7 +108,8 @@
                             <th width="20%"><i class="fas fa-store me-2 text-info"></i>篩選店名</th>
                             <th width="25%"><i class="fas fa-map-marker-alt me-2 text-danger"></i>實體地址指紋</th>
                             <th width="10%"><i class="fas fa-star text-warning me-2"></i>鄉民評分</th>
-                            <th width="40%"><i class="fas fa-comment-alt me-2 text-success"></i>PTT 原始文章標題</th>
+                            <th width="30%"><i class="fas fa-comment-alt me-2 text-success"></i>PTT 原始文章標題</th>
+                            <th class="text-center" width="10%"><i class="fas fa-cogs me-1"></i>操作</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -123,12 +124,20 @@
                             </td>
                             <td><span class="badge bg-success fs-6">{{ r.rating }}</span></td>
                             <td class="small text-secondary">{{ r.ptt_title }}</td>
+                            <td class="text-center">
+                                <form action="/delete_restaurant" method="POST" class="d-inline" onsubmit="return confirm('⚠️ 確定要刪除【{{ r.name }}】這筆資料嗎？刪除後無法復原喔！');">
+                                    <input type="hidden" name="shop_name" value="{{ r.name }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger shadow-sm" title="刪除單筆資料">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </form>
+                            </td>
                         </tr>
                         {% endfor %}
                         
                         {% if not restaurants %}
                         <tr>
-                            <td colspan="5" class="text-center py-5 text-muted fw-bold">
+                            <td colspan="6" class="text-center py-5 text-muted fw-bold">
                                 <i class="fas fa-box-open fs-1 d-block mb-3 opacity-50"></i>目前尚無資料，請點擊上方按鈕開始爬取
                             </td>
                         </tr>
