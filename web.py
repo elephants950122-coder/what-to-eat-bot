@@ -351,6 +351,14 @@ def webhook():
                 action = "recommend_restaurant"
                 break
 
+    # ==========================================
+    # 💡 [新增防呆 4]：廣泛攔截網！就算沒提到咖哩或火鍋，只要有這些關鍵字也放行
+    # ==========================================
+    general_food_keywords = ["美食", "想吃", "肚子餓", "推薦", "吃什麼", "有什麼好吃的", "餐廳"]
+    if action != "recommend_restaurant" and action != "GetFoodList":
+        if any(kw in query_text for kw in general_food_keywords):
+            action = "recommend_restaurant" # 強制賦予推薦動作
+
     info = "抱歉，我目前無法處理這個動作喔！請試著告訴我「想吃沙鹿的美食」。"
     
     if action == "recommend_restaurant":
