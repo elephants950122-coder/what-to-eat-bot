@@ -503,22 +503,86 @@ def webhook():
                 info = "📋 目前資料庫內暫無美食資料，請先前往管理後端同步！"
 
         elif action == "GetFoodList":
-            safe_init_firebase()
-            db = firestore.client()
-            docs = db.collection("restaurants").get()
-            titles = []
-            for doc in docs:
-                item_data = doc.to_dict()
-                if item_data.get("name"):
-                    titles.append(str(item_data.get("name")))
-                    
-            if titles:
-                unique_titles = list(set(titles))
-                info = "📋 目前資料庫收錄的沙鹿美食有：\n\n-- " + "\n-- ".join(unique_titles[:30])
-            else:
-                info = "📋 目前資料庫內暫無美食資料。"
+            # 💡 [新增功能] 將文字清單改為超連結圖卡，引導至 Vercel 網頁端
+            
+            # ⚠️ 請將這裡替換成你真實的 Vercel 網址 (記得要有 https://)
+            your_website_url = "https://what-to-eat-bot.vercel.app/" 
+            
+            list_payload = {
+                "line": {
+                    "type": "flex",
+                    "altText": "📋 沙鹿美食全收錄清單",
+                    "contents": {
+                        "type": "bubble",
+                        "size": "mega",
+                        "header": {
+                            "type": "box",
+                            "layout": "vertical",
+                            "backgroundColor": "#00b894",
+                            "paddingAll": "20px",
+                            "contents": [
+                                {
+                                    "type": "text",
+                                    "text": "📋 靜宜資管專屬",
+                                    "color": "#ffffff",
+                                    "size": "sm",
+                                    "weight": "bold"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "美食大數據全收錄",
+                                    "color": "#ffffff",
+                                    "size": "xl",
+                                    "weight": "bold",
+                                    "margin": "sm"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "type": "box",
+                            "layout": "vertical",
+                            "spacing": "md",
+                            "contents": [
+                                {
+                                    "type": "text",
+                                    "text": "資料筆數太多啦！為了給您最好的閱讀體驗，請點擊下方按鈕前往「專屬網頁版」查看最完整的沙鹿美食清單喔！",
+                                    "wrap": True,
+                                    "size": "sm",
+                                    "color": "#636e72"
+                                }
+                            ]
+                        },
+                        "footer": {
+                            "type": "box",
+                            "layout": "vertical",
+                            "spacing": "sm",
+                            "contents": [
+                                {
+                                    "type": "button",
+                                    "style": "primary",
+                                    "height": "sm",
+                                    "color": "#0984e3",
+                                    "action": {
+                                        "type": "uri",
+                                        "label": "🌐 前往完整資料庫",
+                                        "uri": your_website_url
+                                    }
+                                }
+                            ],
+                            "flex": 0
+                        }
+                    }
+                }
+            }
 
-        return make_response(jsonify({"fulfillmentText": info}))
+            return make_response(jsonify({
+                "fulfillmentText": f"資料筆數太多啦！請前往我們的網站查看完整清單：{your_website_url}",
+                "fulfillmentMessages": [
+                    {
+                        "payload": list_payload
+                    }
+                ]
+            }))
         
     except Exception as e:
         print(f"Webhook Error: {e}")
