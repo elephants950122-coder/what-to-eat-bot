@@ -360,125 +360,154 @@ def webhook():
             action = "recommend_restaurant" # 強制賦予推薦動作
 
     # ==========================================
-    # 💡 [新增功能 5]：LINE Flex Message 終極圖卡說明書
+    # 💡 [新增功能 5]：全新高質感 LINE Flex Message 說明書
     # ==========================================
-    # 我們把打招呼也加進來，讓使用者一說你好就會跳出圖卡
     help_keywords = ["說明", "幫助", "教學", "怎麼用", "功能", "使用方法", "help", "菜單", "使用說明", "你好", "hi", "哈囉", "嗨"]
     
     if any(kw in query_text.lower() for kw in help_keywords) or action == "input.welcome":
-        # 這是專門給 LINE 顯示的精美圖卡 JSON 格式
+        # 專屬全新設計：高質感美食 App 風格圖卡
         flex_payload = {
             "line": {
                 "type": "flex",
-                "altText": "📖 沙鹿美食機器人使用說明書",
+                "altText": "🍟 沙鹿美食管家 - 使用秘笈",
                 "contents": {
                     "type": "bubble",
                     "size": "mega",
                     "header": {
                         "type": "box",
                         "layout": "vertical",
+                        "backgroundColor": "#ff7675",
                         "contents": [
                             {
                                 "type": "text",
-                                "text": "📖 沙鹿美食管家",
+                                "text": "🍽️ 靜宜資管專屬",
                                 "color": "#ffffff",
-                                "weight": "bold",
-                                "size": "sm"
+                                "size": "sm",
+                                "weight": "bold"
                             },
                             {
                                 "type": "text",
-                                "text": "如何呼叫美食雷達？",
+                                "text": "美食雷達使用秘笈",
                                 "color": "#ffffff",
-                                "weight": "bold",
                                 "size": "xl",
-                                "margin": "md"
+                                "weight": "bold",
+                                "margin": "sm"
                             }
                         ],
-                        "backgroundColor": "#2c3e50",
                         "paddingAll": "20px"
                     },
                     "body": {
                         "type": "box",
                         "layout": "vertical",
+                        "spacing": "md",
                         "contents": [
                             {
                                 "type": "text",
-                                "text": "嗨！我是你的專屬美食管家 🍔\n直接【輸入文字】就可以呼叫我喔！以下是快速對話秘訣：",
-                                "wrap": True,
+                                "text": "不用按按鈕，直接跟我聊天吧！",
                                 "size": "sm",
-                                "color": "#666666",
-                                "margin": "md"
-                            },
-                            {
-                                "type": "separator",
-                                "margin": "lg"
-                            },
-                            {
-                                "type": "text",
-                                "text": "🎲 隨機推薦",
-                                "weight": "bold",
-                                "size": "md",
-                                "color": "#e67e22",
-                                "margin": "lg"
-                            },
-                            {
-                                "type": "text",
-                                "text": "• 範例：直接輸入「肚子餓了」或「沙鹿美食」",
-                                "size": "xs",
-                                "color": "#999999",
-                                "wrap": True
-                            },
-                            {
-                                "type": "text",
-                                "text": "🎯 指定種類",
-                                "weight": "bold",
-                                "size": "md",
-                                "color": "#27ae60",
-                                "margin": "lg"
-                            },
-                            {
-                                "type": "text",
-                                "text": "• 範例：輸入「推薦咖哩」或「想吃火鍋」",
-                                "size": "xs",
-                                "color": "#999999",
-                                "wrap": True
-                            },
-                            {
-                                "type": "text",
-                                "text": "📋 總覽清單",
-                                "weight": "bold",
-                                "size": "md",
-                                "color": "#2980b9",
-                                "margin": "lg"
-                            },
-                            {
-                                "type": "text",
-                                "text": "• 範例：輸入「查看全部資料」",
-                                "size": "xs",
-                                "color": "#999999",
-                                "wrap": True
-                            },
-                            {
-                                "type": "separator",
-                                "margin": "lg"
-                            },
-                            {
-                                "type": "text",
-                                "text": "💡 提示：本系統目前僅專注於提供『沙鹿區』的美食情報喔！快去試試看吧～",
+                                "color": "#636e72",
                                 "wrap": True,
-                                "size": "xs",
-                                "color": "#aaaaaa",
-                                "margin": "md"
+                                "weight": "bold"
+                            },
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "margin": "lg",
+                                "spacing": "sm",
+                                "contents": [
+                                    {
+                                        "type": "box",
+                                        "layout": "baseline",
+                                        "spacing": "sm",
+                                        "contents": [
+                                            {"type": "text", "text": "🎲", "flex": 1, "size": "md"},
+                                            {"type": "text", "text": "想要隨機推薦？", "weight": "bold", "size": "sm", "color": "#2d3436", "flex": 5}
+                                        ]
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": "👉 請輸入「肚子餓了」或「沙鹿美食」",
+                                        "size": "xs",
+                                        "color": "#b2bec3",
+                                        "wrap": True,
+                                        "margin": "xs"
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "margin": "lg",
+                                "spacing": "sm",
+                                "contents": [
+                                    {
+                                        "type": "box",
+                                        "layout": "baseline",
+                                        "spacing": "sm",
+                                        "contents": [
+                                            {"type": "text", "text": "🎯", "flex": 1, "size": "md"},
+                                            {"type": "text", "text": "有特別想吃的？", "weight": "bold", "size": "sm", "color": "#2d3436", "flex": 5}
+                                        ]
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": "👉 請輸入「推薦咖哩」或「想吃宵夜」",
+                                        "size": "xs",
+                                        "color": "#b2bec3",
+                                        "wrap": True,
+                                        "margin": "xs"
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "margin": "lg",
+                                "spacing": "sm",
+                                "contents": [
+                                    {
+                                        "type": "box",
+                                        "layout": "baseline",
+                                        "spacing": "sm",
+                                        "contents": [
+                                            {"type": "text", "text": "📋", "flex": 1, "size": "md"},
+                                            {"type": "text", "text": "想看全部清單？", "weight": "bold", "size": "sm", "color": "#2d3436", "flex": 5}
+                                        ]
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": "👉 請輸入「查看全部資料」",
+                                        "size": "xs",
+                                        "color": "#b2bec3",
+                                        "wrap": True,
+                                        "margin": "xs"
+                                    }
+                                ]
                             }
                         ]
+                    },
+                    "footer": {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "✨ 資料來源：PTT 美食版大數據",
+                                "color": "#fdcb6e",
+                                "size": "xs",
+                                "align": "center",
+                                "weight": "bold"
+                            }
+                        ],
+                        "backgroundColor": "#2d3436"
                     }
                 }
             }
         }
 
-        # 透過 Dialogflow 的 fulfillmentMessages 傳遞 payload 給 LINE
+        # 透過 Dialogflow 傳遞 payload 給 LINE
         return make_response(jsonify({
-            "fulfillmentText": "這是一份使用說明書，請在 LINE 手機版上查看精美圖卡！",
+            "fulfillmentText": "請在 LINE 手機版上查看精美圖卡！",
             "fulfillmentMessages": [
                 {
                     "payload": flex_payload
@@ -486,7 +515,7 @@ def webhook():
             ]
         }))
 
-    # 預設的錯誤回覆（Fallback），如果亂打字聽不懂，就引導他打「說明」
+    # 預設的錯誤回覆（Fallback）
     info = "🥺 抱歉，我好像聽不太懂這個指令喔！\n你可以輸入「說明」或「你好」來查看使用教學卡片！"
     
     if action == "recommend_restaurant":
