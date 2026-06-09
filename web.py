@@ -305,7 +305,7 @@ def webhook():
                 "header": {
                     "type": "box",
                     "layout": "vertical",
-                    "backgroundColor": "#ff7675",
+                    "backgroundColor": "#2c3e50",
                     "paddingAll": "20px",
                     "contents": [
                         {
@@ -396,7 +396,7 @@ def webhook():
         list_keywords = ["查看全部資料", "查看全部", "全部資料", "所有清單", "總覽"]
         if any(kw in query_text for kw in list_keywords):
             # ⚠️ 記得把下面的網址換成你們小組 Vercel 部署出來的真實網址喔！
-            your_website_url = "https://your-vercel-app-url.vercel.app/" 
+            your_website_url = "https://what-to-eat-bot.vercel.app/" 
             
             list_payload = {
                 "type": "bubble",
