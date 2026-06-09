@@ -360,12 +360,12 @@ def webhook():
             action = "recommend_restaurant" # 強制賦予推薦動作
 
     # ==========================================
-    # 💡 [新增功能 5]：全新高質感 LINE Flex Message 說明書
+    # 💡 [新增功能 5]：全新高質感 LINE Flex Message 說明書 (修復版)
     # ==========================================
-    help_keywords = ["說明", "幫助", "教學", "怎麼用", "功能", "使用方法", "help", "菜單", "使用說明", "你好", "hi", "哈囉", "嗨"]
+    help_keywords = ["說明", "幫助", "教學", "怎麼用", "功能", "使用方法", "help", "菜單", "使用說明", "你好", "hi", "哈囉", "嗨", "說明書", "啊喂"]
     
     if any(kw in query_text.lower() for kw in help_keywords) or action == "input.welcome":
-        # 專屬全新設計：高質感美食 App 風格圖卡
+        # 專屬全新設計：高質感美食 App 風格圖卡 (已修正 LINE 嚴格的排版格式)
         flex_payload = {
             "line": {
                 "type": "flex",
@@ -417,7 +417,7 @@ def webhook():
                                 "contents": [
                                     {
                                         "type": "box",
-                                        "layout": "baseline",
+                                        "layout": "horizontal",
                                         "spacing": "sm",
                                         "contents": [
                                             {"type": "text", "text": "🎲", "flex": 1, "size": "md"},
@@ -442,7 +442,7 @@ def webhook():
                                 "contents": [
                                     {
                                         "type": "box",
-                                        "layout": "baseline",
+                                        "layout": "horizontal",
                                         "spacing": "sm",
                                         "contents": [
                                             {"type": "text", "text": "🎯", "flex": 1, "size": "md"},
@@ -467,7 +467,7 @@ def webhook():
                                 "contents": [
                                     {
                                         "type": "box",
-                                        "layout": "baseline",
+                                        "layout": "horizontal",
                                         "spacing": "sm",
                                         "contents": [
                                             {"type": "text", "text": "📋", "flex": 1, "size": "md"},
@@ -505,7 +505,6 @@ def webhook():
             }
         }
 
-        # 透過 Dialogflow 傳遞 payload 給 LINE
         return make_response(jsonify({
             "fulfillmentText": "請在 LINE 手機版上查看精美圖卡！",
             "fulfillmentMessages": [
